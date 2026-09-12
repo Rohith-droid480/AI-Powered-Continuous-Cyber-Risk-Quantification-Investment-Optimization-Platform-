@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+numpy
+scipy
+pulp
+pydantic
+sqlalchemy
+psycopg2-binary
+python-multipart
+lxml
+pytest
+httpx
+
