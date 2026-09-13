@@ -16,3 +16,13 @@ def test_tcap_kev_false():
     """
     result = calculate_tcap(is_kev=False, epss_score=0.25)
     assert result == 0.25, f"Expected 0.25 for KEV=False, got {result}"
+
+
+def test_rs_baseline():
+    """
+    Test RS - Input RS: 0.5 -> Expected RS: 0.5
+    """
+    from app.risk.calibration import calculate_rs
+    result = calculate_rs(0.5)
+    assert result == 0.5, f"Expected RS of 0.5, got {result}"
+

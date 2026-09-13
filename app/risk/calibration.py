@@ -35,3 +35,25 @@ def calculate_tcap(is_kev: bool, epss_score: float) -> float:
     if is_kev:
         return 1.0
     return float(epss_score)
+
+
+def calculate_rs(rs: float = 0.5) -> float:
+    """
+    Validate and return organizational baseline Resistance Strength (RS).
+    
+    RS represents the defensive capability of the target asset/organization
+    constrained strictly to the range [0.0, 1.0].
+    
+    Note: TCap / RS mapping and calibration are OUR MODELING ASSUMPTIONS,
+    not canonical FAIR definitions.
+    
+    :param rs: Defense score float in range [0.0, 1.0]. Default is 0.5.
+    :return: Validated RS float score.
+    :raises ValueError: If RS is outside [0.0, 1.0].
+    """
+    # TCap / RS mapping is OUR MODELING ASSUMPTION, not canonical FAIR.
+    rs_val = float(rs)
+    if not (0.0 <= rs_val <= 1.0):
+        raise ValueError(f"RS score must be between 0.0 and 1.0 inclusive, got {rs_val}")
+    return rs_val
+
