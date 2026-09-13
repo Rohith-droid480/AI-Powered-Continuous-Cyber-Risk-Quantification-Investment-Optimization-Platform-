@@ -1,18 +1,19 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, status
-from typing import Dict, Any
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, status
+from typing import Dict, Any, Optional
 
-from app.schemas import (
+from app.schemas.models import (
     JobStatus,
     JobStatusEnum,
     SimulationResults,
     OptimizationResults,
     PerCveRiskSummary,
 )
+from app.ingestion.jobs import job_manager
 
 app = FastAPI(
     title="Continuous Cyber Risk Quantification & Investment Optimization API",
     version="0.1.0",
-    description="Backend API stubs for scan upload, risk simulation, and patch optimization.",
+    description="Backend API for scan upload, async ingestion, risk simulation, and patch optimization.",
 )
 
 
@@ -22,15 +23,77 @@ def read_root():
 
 
 @app.post("/scan/upload", response_model=JobStatus, status_code=status.HTTP_200_OK)
-async def upload_scan(file: UploadFile = File(None)):
+async def upload_scan(
+    background_tasks: BackgroundTasks,
+    file: Optional[UploadFile] = File(None),
+):
     """
-    POST /scan/upload - Accepts Nessus XML scan file upload and returns job_id instantly.
+    POST /scan/upload - Accepts Nessus XML scan file upload and returns job_id immediately.
+    Parsing and ingestion run asynchronously in the background.
     """
-    return JobStatus(
-        job_id="job_stub_001",
-        status=JobStatusEnum.PARSED,
-        message="Scan file received and initial parsing completed (stub)."
+    if file is None:
+        # Fail-soft: create job in INGESTION_FAILED state cleanly
+        job_id = job_manager.create_job(
+            initial_status=JobStatusEnum.INGESTION_FAILED,
+            message="No scan file provided in upload.",
+        )
+        job = job_manager.get_job(job_id)
+        return job.to_job_status()
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        job_id = job_manager.create_job(
+            initial_status=JobStatusEnum.INGESTION_FAILED,
+            message="Uploaded scan file is empty.",
+        )
+        job = job_manager.get_job(job_id)
+        return job.to_job_status()
+
+    # Create job in PROCESSING state
+    job_id = job_manager.create_job(
+        initial_status=JobStatusEnum.PROCESSING,
+        message="Scan file received; background ingestion in progress.",
     )
+
+    # Schedule background ingestion worker
+    background_tasks.add_task(job_manager.process_scan_job, job_id, file_bytes)
+
+    job = job_manager.get_job(job_id)
+    return job.to_job_status()
+
+
+@app.get("/scan/{job_id}/status", response_model=JobStatus, status_code=status.HTTP_200_OK)
+async def get_job_status(job_id: str):
+    """
+    GET /scan/{job_id}/status - Returns current processing status of the ingestion job.
+    """
+    job = job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found.",
+        )
+    return job.to_job_status()
+
+
+@app.get("/scan/{job_id}/vulnerabilities", status_code=status.HTTP_200_OK)
+async def get_parsed_vulnerabilities(job_id: str) -> Dict[str, Any]:
+    """
+    GET /scan/{job_id}/vulnerabilities - Returns parsed vulnerabilities once ingestion is complete.
+    """
+    job = job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found.",
+        )
+    return {
+        "job_id": job.job_id,
+        "status": job.status.value,
+        "message": job.message,
+        "count": len(job.parsed_vulnerabilities),
+        "vulnerabilities": [v.model_dump() for v in job.parsed_vulnerabilities],
+    }
 
 
 @app.get("/scan/{job_id}/results", status_code=status.HTTP_200_OK)
@@ -57,7 +120,7 @@ async def get_scan_results(job_id: str) -> Dict[str, Any]:
                 expected_loss_magnitude=750000.0,
                 baseline_eal=75000.0,
             ),
-        ]
+        ],
     )
 
     stub_opt_results = OptimizationResults(
@@ -68,7 +131,7 @@ async def get_scan_results(job_id: str) -> Dict[str, Any]:
         post_opt_eal=75000.0,
         post_opt_var_95=175000.0,
         post_opt_cvar_95=210000.0,
-        delta_eal_per_cve={"CVE-2021-44228": 75000.0}
+        delta_eal_per_cve={"CVE-2021-44228": 75000.0},
     )
 
     return {
