@@ -118,20 +118,19 @@ def calibrate_primary_loss(
     
     Primary Loss ~ LogNormal(mu, sigma)
     
-    Calibration Inputs:
-    - mean_loss (mu_X): ₹255,000,000 (IBM India 2026 all-sector mean breach cost in INR).
-    - cv_loss (CV_X): 2.0 (coefficient of variation assumption within empirical 1.5-2.5 range).
+    We anchor the mean of our assumed LogNormal primary-loss distribution to IBM's
+    reported 2026 India average total breach cost (₹255,000,000). The dispersion (CV=2.0)
+    and the resulting μ≈18.5520, σ≈1.2686 are our own assumption and mathematical transformation
+    — IBM does not publish a LogNormal mean or these distribution parameters directly.
     
-    Equations:
-    - sigma^2 = ln(1 + CV_X^2) = ln(1 + 4) = ln(5) => sigma = sqrt(ln(5)) approx 1.2686
-    - mu = ln(mu_X) - 0.5 * sigma^2 = ln(255,000,000) - 0.5 * ln(5) approx 18.5520
-    - E[Primary Loss] = exp(mu + 0.5 * sigma^2) = mu_X = ₹255,000,000
-    
-    :param mean_loss: Mean breach loss in INR (₹).
-    :param cv_loss: Coefficient of variation (dimensionless).
+    :param mean_loss: Mean breach loss in INR (₹). Default ₹255,000,000.
+    :param cv_loss: Coefficient of variation (dimensionless). Default 2.0.
     :return: Tuple of (mu, sigma, expected_primary_loss) in INR (₹).
     """
-    # CV_X = 2.0 is our modeling assumption, while mu_X = ₹255,000,000 is the directly sourced IBM India value.
+    # Primary Loss: We anchor the mean of our assumed LogNormal primary-loss distribution to IBM's
+    # reported 2026 India average total breach cost (₹255,000,000). The dispersion (CV=2.0) and the
+    # resulting μ≈18.5520, σ≈1.2686 are our own assumption and mathematical transformation — IBM does
+    # not publish a LogNormal mean or these distribution parameters directly.
     mu_x = float(mean_loss)
     cv_x = float(cv_loss)
     
@@ -150,16 +149,22 @@ def calculate_secondary_loss(
     """
     Calculate Secondary Loss based on Primary Loss.
     
+    Secondary Loss = 0.4 × Primary Loss. This 0.4 multiplier is our own conservative
+    illustrative assumption, accounting for additional non-primary costs (regulatory,
+    reputational, customer churn) not fully captured in the primary-loss anchor. It is
+    not derived from an IBM cost-category percentage, and is not specific to DPDPA —
+    DPDPA is only an example of the kind of exposure this margin is meant to cover, not its source.
+    
     :param primary_loss: Expected Primary Loss in INR (₹).
     :param secondary_ratio: Multiplier for secondary loss exposure. Default is 0.4.
     :return: Expected Secondary Loss in INR (₹).
     """
-    # 0.4 is a deliberately conservative illustrative multiplier
-    # representing additional regulatory/reputational exposure (e.g. DPDPA
-    # penalties up to ₹250 crore per docs/research/Cyber_Risk_Loss_Modeling_Research.md)
-    # — it is NOT derived from IBM's published cost-category percentage breakdown,
-    # and must not be described that way in the milestone report or the pitch deck.
+    # Secondary Loss = 0.4 × Primary Loss. This 0.4 multiplier is our own conservative illustrative
+    # assumption, accounting for additional non-primary costs (regulatory, reputational, customer churn)
+    # not fully captured in the primary-loss anchor. It is not derived from an IBM cost-category percentage,
+    # and is not specific to DPDPA — DPDPA is only an example of the kind of exposure this margin is meant to cover, not its source.
     return float(primary_loss) * float(secondary_ratio)
+
 
 
 def calculate_loss_magnitude(primary_loss: float, secondary_loss: float) -> float:

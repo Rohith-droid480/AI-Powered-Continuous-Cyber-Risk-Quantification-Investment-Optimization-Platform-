@@ -104,12 +104,11 @@ No claim of "official FAIR standard" or "canonical FAIR formula" is made for the
 
 - **Modeling Assumptions**:
   - The ratio $\text{Vuln} = \frac{\text{TCap}}{\text{TCap} + \text{RS}}$ and the mapping of KEV/EPSS to TCap are our modeling assumptions designed for hackathon tractability and transparency, not canonical FAIR standard formulas.
-  - The coefficient of variation $CV_X = 2.0$ is an assumed dispersion value within the empirical range of $1.5–2.5$.
-  - The $0.4$ secondary loss multiplier is a conservative illustrative parameter representing regulatory/DPDPA penalty exposure.
-- **Sourced Values**:
-  - Mean Primary Loss $\mu_X = \text{₹}255,000,000$ is directly derived from published IBM Cost of a Data Breach India data.
+  - **Primary Loss**: We anchor the mean of our assumed LogNormal primary-loss distribution to IBM's reported 2026 India average total breach cost (₹255,000,000). The dispersion (CV=2.0) and the resulting $\mu \approx 18.5520, \sigma \approx 1.2686$ are our own assumption and mathematical transformation — IBM does not publish a LogNormal mean or these distribution parameters directly.
+  - **Secondary Loss**: Secondary Loss = 0.4 × Primary Loss. This 0.4 multiplier is our own conservative illustrative assumption, accounting for additional non-primary costs (regulatory, reputational, customer churn) not fully captured in the primary-loss anchor. It is not derived from an IBM cost-category percentage, and is not specific to DPDPA — DPDPA is only an example of the kind of exposure this margin is meant to cover, not its source.
 - **FAIR-Structural**:
   - $\text{LEF} = \text{TEF} \times \text{Vuln}$ is the canonical structural relationship in FAIR risk analysis.
+
 
 ---
 
