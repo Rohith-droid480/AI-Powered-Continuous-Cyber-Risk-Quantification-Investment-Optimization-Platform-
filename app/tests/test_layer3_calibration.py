@@ -26,3 +26,13 @@ def test_rs_baseline():
     result = calculate_rs(0.5)
     assert result == 0.5, f"Expected RS of 0.5, got {result}"
 
+
+def test_vuln_hand_computable():
+    """
+    Test Vuln - TCap=1.0, RS=0.5 -> Expected Vuln = 1.0 / (1.0 + 0.5) = 0.666666... approx 0.667
+    """
+    from app.risk.calibration import calculate_vuln
+    result = calculate_vuln(t_cap=1.0, rs=0.5)
+    assert pytest.approx(result, abs=1e-3) == 0.667, f"Expected approx 0.667, got {result}"
+
+

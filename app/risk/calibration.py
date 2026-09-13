@@ -57,3 +57,25 @@ def calculate_rs(rs: float = 0.5) -> float:
         raise ValueError(f"RS score must be between 0.0 and 1.0 inclusive, got {rs_val}")
     return rs_val
 
+
+def calculate_vuln(t_cap: float, rs: float) -> float:
+    """
+    Calculate Vulnerability ratio (Vuln).
+    
+    Formula: Vuln = TCap / (TCap + RS)
+    
+    Note: TCap / RS mapping and calibration are OUR MODELING ASSUMPTIONS,
+    not canonical FAIR definitions.
+    
+    :param t_cap: Threat Capability float in range [0.0, 1.0].
+    :param rs: Resistance Strength float in range [0.0, 1.0].
+    :return: Vulnerability ratio float in range [0.0, 1.0].
+    :raises ValueError: If (t_cap + rs) <= 0.
+    """
+    # TCap / RS mapping is OUR MODELING ASSUMPTION, not canonical FAIR.
+    denominator = float(t_cap) + float(rs)
+    if denominator <= 0:
+        raise ValueError(f"Denominator (TCap + RS) must be greater than 0, got {denominator}")
+    return float(t_cap) / denominator
+
+
