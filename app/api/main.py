@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, status
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from app.schemas.models import (
     JobStatus,
@@ -7,6 +7,7 @@ from app.schemas.models import (
     SimulationResults,
     OptimizationResults,
     PerCveRiskSummary,
+    EnrichedVulnerability,
 )
 from app.ingestion.jobs import job_manager
 
@@ -76,10 +77,14 @@ async def get_job_status(job_id: str):
     return job.to_job_status()
 
 
-@app.get("/scan/{job_id}/vulnerabilities", status_code=status.HTTP_200_OK)
-async def get_parsed_vulnerabilities(job_id: str) -> Dict[str, Any]:
+@app.get(
+    "/scan/{job_id}/vulnerabilities",
+    response_model=List[EnrichedVulnerability],
+    status_code=status.HTTP_200_OK,
+)
+async def get_parsed_vulnerabilities(job_id: str) -> List[EnrichedVulnerability]:
     """
-    GET /scan/{job_id}/vulnerabilities - Returns parsed vulnerabilities once ingestion is complete.
+    GET /scan/{job_id}/vulnerabilities - Returns enriched vulnerabilities once ingestion is complete.
     """
     job = job_manager.get_job(job_id)
     if not job:
@@ -87,13 +92,7 @@ async def get_parsed_vulnerabilities(job_id: str) -> Dict[str, Any]:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Job {job_id} not found.",
         )
-    return {
-        "job_id": job.job_id,
-        "status": job.status.value,
-        "message": job.message,
-        "count": len(job.parsed_vulnerabilities),
-        "vulnerabilities": [v.model_dump() for v in job.parsed_vulnerabilities],
-    }
+    return job.enriched_vulnerabilities
 
 
 @app.get("/scan/{job_id}/results", status_code=status.HTTP_200_OK)
