@@ -92,4 +92,22 @@ def calculate_tef(base_contact_rate: float, exposure_factor: float) -> float:
     return float(base_contact_rate) * float(exposure_factor)
 
 
+def calculate_lef(tef: float, vuln: float) -> float:
+    """
+    Calculate Loss Event Frequency (LEF).
+    
+    Formula: LEF = TEF * Vuln
+    
+    :param tef: Threat Event Frequency in events/year.
+    :param vuln: Vulnerability ratio in range [0.0, 1.0].
+    :return: LEF float value in loss events/year.
+    """
+    # FAIR-STRUCTURAL: LEF = TEF * Vuln.
+    # This relationship is the FAIR-structural portion of Layer 3.
+    # The upstream TCap/RS calibration is our modeling assumption and is not
+    # being represented as canonical FAIR.
+    return float(tef) * float(vuln)
+
+
+
 

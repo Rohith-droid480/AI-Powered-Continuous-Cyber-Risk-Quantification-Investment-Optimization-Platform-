@@ -45,4 +45,14 @@ def test_tef_hand_computable():
     assert result == 1.0, f"Expected TEF of 1.0 event/year, got {result}"
 
 
+def test_lef_hand_computable():
+    """
+    Test LEF - TEF = 1.0, Vuln = 0.5 -> Expected LEF = 1.0 * 0.5 = 0.5 loss events/year
+    """
+    from app.risk.calibration import calculate_lef
+    result = calculate_lef(tef=1.0, vuln=0.5)
+    assert result == 0.5, f"Expected LEF of 0.5 loss events/year, got {result}"
+
+
+
 
