@@ -84,6 +84,73 @@ def test_loss_magnitude_hand_computable():
     assert result == 1_400_000.0, f"Expected ₹1,400,000, got {result}"
 
 
+def test_edge_case_rs_out_of_bounds():
+    """
+    Edge Case Test - Invalid RS bounds (< 0 or > 1) raise ValueError
+    """
+    from app.risk.calibration import calculate_rs
+    with pytest.raises(ValueError, match="RS score must be between 0.0 and 1.0"):
+        calculate_rs(-0.1)
+    with pytest.raises(ValueError, match="RS score must be between 0.0 and 1.0"):
+        calculate_rs(1.5)
+
+
+def test_edge_case_vuln_zero_denominator():
+    """
+    Edge Case Test - Denominator (TCap + RS) <= 0 raises ValueError
+    """
+    from app.risk.calibration import calculate_vuln
+    with pytest.raises(ValueError, match="Denominator \\(TCap \\+ RS\\) must be greater than 0"):
+        calculate_vuln(t_cap=0.0, rs=0.0)
+
+
+def test_full_risk_calibration_pipeline_schema():
+    """
+    Pipeline Test - Verify calibrate_vulnerability_risk returns valid CalibratedRiskRecord
+    matching Pydantic contract exactly.
+    """
+    from app.schemas.models import EnrichedVulnerability, EnrichmentStatus, CalibratedRiskRecord
+    from app.risk.calibration import calibrate_vulnerability_risk
+    
+    vuln_input = EnrichedVulnerability(
+        cve_id="CVE-2021-44228",
+        plugin_id="155998",
+        plugin_name="Apache Log4j RCE",
+        host="192.168.1.100",
+        port=8080,
+        protocol="tcp",
+        severity=4,
+        description="Log4j remote code execution vulnerability",
+        cvss_score=10.0,
+        epss_score=0.97,
+        is_kev=True,
+        enrichment_status=EnrichmentStatus.FULL
+    )
+    
+    record = calibrate_vulnerability_risk(
+        vulnerability=vuln_input,
+        rs=0.5,
+        base_contact_rate=2.0,
+        exposure_factor=0.5,
+        mean_primary_loss=255_000_000.0,
+        cv_primary_loss=2.0
+    )
+    
+    assert isinstance(record, CalibratedRiskRecord)
+    assert record.vulnerability.cve_id == "CVE-2021-44228"
+    assert record.t_cap == 1.0
+    assert record.rs == 0.5
+    assert pytest.approx(record.vuln, abs=1e-3) == 0.667
+    assert record.tef == 1.0
+    assert pytest.approx(record.lef, abs=1e-3) == 0.667
+    assert pytest.approx(record.primary_loss_mu, abs=1e-3) == 18.5520
+    assert pytest.approx(record.primary_loss_sigma, abs=1e-3) == 1.2686
+    assert record.expected_primary_loss == 255_000_000.0
+    assert record.expected_secondary_loss == 102_000_000.0
+    assert record.expected_loss_magnitude == 357_000_000.0
+
+
+
 
 
 

@@ -175,6 +175,59 @@ def calculate_loss_magnitude(primary_loss: float, secondary_loss: float) -> floa
     return float(primary_loss) + float(secondary_loss)
 
 
+def calibrate_vulnerability_risk(
+    vulnerability: EnrichedVulnerability,
+    rs: float = 0.5,
+    base_contact_rate: float = 2.0,
+    exposure_factor: float = 0.5,
+    mean_primary_loss: float = 255_000_000.0,
+    cv_primary_loss: float = 2.0
+) -> CalibratedRiskRecord:
+    """
+    Pipeline function to compute full Layer 3 risk calibration for a given vulnerability.
+    
+    Returns an instance of CalibratedRiskRecord matching app/schemas/models.py.
+    """
+    # 1. TCap
+    t_cap = calculate_tcap(is_kev=vulnerability.is_kev, epss_score=vulnerability.epss_score)
+    
+    # 2. RS validation
+    validated_rs = calculate_rs(rs)
+    
+    # 3. Vuln
+    vuln = calculate_vuln(t_cap=t_cap, rs=validated_rs)
+    
+    # 4. TEF
+    tef = calculate_tef(base_contact_rate=base_contact_rate, exposure_factor=exposure_factor)
+    
+    # 5. LEF
+    lef = calculate_lef(tef=tef, vuln=vuln)
+    
+    # 6. Primary Loss calibration
+    mu, sigma, exp_primary = calibrate_primary_loss(mean_loss=mean_primary_loss, cv_loss=cv_primary_loss)
+    
+    # 7. Secondary Loss
+    exp_secondary = calculate_secondary_loss(primary_loss=exp_primary, secondary_ratio=0.4)
+    
+    # 8. Loss Magnitude
+    loss_magnitude = calculate_loss_magnitude(primary_loss=exp_primary, secondary_loss=exp_secondary)
+    
+    return CalibratedRiskRecord(
+        vulnerability=vulnerability,
+        t_cap=t_cap,
+        rs=validated_rs,
+        vuln=vuln,
+        tef=tef,
+        lef=lef,
+        primary_loss_mu=mu,
+        primary_loss_sigma=sigma,
+        expected_primary_loss=exp_primary,
+        expected_secondary_loss=exp_secondary,
+        expected_loss_magnitude=loss_magnitude
+    )
+
+
+
 
 
 
