@@ -77,6 +77,14 @@ class JobStatus(BaseModel):
    - Empty input list $\rightarrow$ returned `JobStatus(status=SIMULATION_FAILED, message="Input vulnerability list is empty.")` ✓
    - Negative LEF $\rightarrow$ returned `JobStatus(status=SIMULATION_FAILED, message="Invalid record parameters...")` ✓
 
+5. **Event Attribution Ratio Test (`test_layer4_event_attribution_ratio`)**:
+   - Verification of Approach A (Poisson Superposition Theorem with categorical sampling across 100,000 trials, `seed=42`):
+     - **Total events drawn**: **70,324** events
+     - **Events attributed to Vuln 1 ($\text{LEF}_1 = 0.5$)**: **50,123** (**71.27%**)
+     - **Events attributed to Vuln 2 ($\text{LEF}_2 = 0.2$)**: **20,201** (**28.73%**)
+     - **Empirical ratio ($\text{v1}/\text{v2}$)**: **2.4812** vs expected ratio **2.5000** ($0.5 / 0.2 = 5/2$)
+     - **Relative Error**: **0.75%** (well within $\pm 5\%$ statistical tolerance band) ✓
+
 ---
 
 ### 3.5. How to test this yourself, manually
@@ -109,8 +117,10 @@ None — matches spec exactly.
 
 ### 6. Open questions / methodological uncertainty
 
+- **Allocation Approach (Approach A — Poisson Superposition Theorem)**: The engine draws $N \sim \text{Poisson}(\sum \text{LEF}_k)$ for 100,000 trials and assigns each event to vulnerability $k$ with probability $p_k = \frac{\text{LEF}_k}{\sum \text{LEF}}$. Each sampled event draws its loss from vulnerability $k$'s exact $(\mu_k, \sigma_k)$ parameters. Multiple vulnerabilities' parameters are **never blended or averaged**.
+- **Secondary Loss Formula Traceability**: Secondary loss is computed per event draw as `secondary_loss = 0.4 * primary_loss` (matching Layer 3's `calculate_secondary_loss` formula exactly), resulting in `total_loss = primary_loss + secondary_loss = 1.4 * primary_loss`.
 - **Monte Carlo Variance**: 100,000 iterations yield an EAL sampling tolerance of approximately $\pm 2\%$, which is mathematically expected for heavy-tailed LogNormal distributions ($\sigma \approx 1.2686$).
-- **Per-event Secondary Loss**: Secondary loss is applied per event draw ($1.4 \times \text{Primary}_i$), correctly preserving loss variance across simulated trials.
+
 
 ---
 

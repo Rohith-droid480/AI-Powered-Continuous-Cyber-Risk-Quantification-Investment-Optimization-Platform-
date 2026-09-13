@@ -120,7 +120,9 @@ def run_monte_carlo_simulation(
         # Draw LogNormal primary losses for all total_events in one call
         primary_losses = rng.lognormal(mean=sampled_mus, sigma=sampled_sigmas)
         
-        # Loss_i = Primary_i + Secondary_i = 1.4 * Primary_i
+        # Traceability to Layer 3 formulas:
+        # secondary_loss = 0.4 * primary_loss   # matches Layer 3's calculate_secondary_loss formula exactly
+        # total_loss = primary_loss + secondary_loss   # = 1.4 * primary_loss
         event_losses = primary_losses * 1.4
         
         # Map each event to its iteration index using np.repeat and aggregate with np.bincount

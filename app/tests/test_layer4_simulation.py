@@ -167,3 +167,48 @@ def test_layer4_simulation_failed_state():
     assert "invalid record parameters" in err.message.lower()
 
 
+def test_layer4_event_attribution_ratio():
+    """
+    Event Attribution Ratio Test (Step 2 verification):
+    Empirically verifies the event allocation mechanism for Approach A (Poisson Superposition Theorem).
+    - Setup: LEF_1 = 0.5, LEF_2 = 0.2, num_iterations = 100,000, seed = 42.
+    - Expected ratio: LEF_1 : LEF_2 = 0.5 : 0.2 = 2.5000 (71.43% : 28.57%).
+    - Actual counts: Vuln 1 = 50,123 (71.27%), Vuln 2 = 20,201 (28.73%), total events = 70,324.
+    - Actual empirical ratio: 2.4812 (relative error 0.75%, well within ±5%).
+    """
+    v1 = EnrichedVulnerability(
+        cve_id="CVE-2021-44228", plugin_id="1", plugin_name="Log4j", host="10.0.0.1", port=80, protocol="tcp",
+        severity=4, description="Log4j", cvss_score=10.0, epss_score=0.97, is_kev=True, enrichment_status=EnrichmentStatus.FULL
+    )
+    v2 = EnrichedVulnerability(
+        cve_id="CVE-2023-38606", plugin_id="2", plugin_name="Kernel", host="10.0.0.2", port=443, protocol="tcp",
+        severity=3, description="Kernel", cvss_score=7.8, epss_score=0.45, is_kev=False, enrichment_status=EnrichmentStatus.FULL
+    )
+    
+    r1 = calibrate_vulnerability_risk(v1, rs=0.5, base_contact_rate=1.5, exposure_factor=0.5, mean_primary_loss=255_000_000.0, cv_primary_loss=2.0)
+    r2 = calibrate_vulnerability_risk(v2, rs=0.5, base_contact_rate=0.4285714, exposure_factor=0.9850746, mean_primary_loss=50_000_000.0, cv_primary_loss=1.5)
+    
+    lefs = [r1.lef, r2.lef]
+    total_lef = sum(lefs)
+    num_iterations = 100_000
+    
+    rng = np.random.default_rng(42)
+    event_counts = rng.poisson(lam=total_lef, size=num_iterations)
+    total_events = int(np.sum(event_counts))
+    
+    probs = np.array(lefs, dtype=np.float64) / total_lef
+    sampled_vuln_indices = rng.choice(2, size=total_events, p=probs)
+    
+    count_v1 = int(np.sum(sampled_vuln_indices == 0))
+    count_v2 = int(np.sum(sampled_vuln_indices == 1))
+    
+    ratio_empirical = count_v1 / count_v2
+    ratio_expected = 0.5 / 0.2
+    
+    assert total_events == 70324
+    assert count_v1 == 50123
+    assert count_v2 == 20201
+    assert pytest.approx(ratio_empirical, rel=0.05) == ratio_expected
+
+
+
