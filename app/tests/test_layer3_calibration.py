@@ -75,6 +75,16 @@ def test_secondary_loss_hand_computable():
     assert result == 400_000.0, f"Expected ₹400,000, got {result}"
 
 
+def test_loss_magnitude_hand_computable():
+    """
+    Test Loss Magnitude - Primary Loss = ₹1,000,000, Secondary Loss = ₹400,000 -> Expected Loss Magnitude = ₹1,400,000
+    """
+    from app.risk.calibration import calculate_loss_magnitude
+    result = calculate_loss_magnitude(primary_loss=1_000_000.0, secondary_loss=400_000.0)
+    assert result == 1_400_000.0, f"Expected ₹1,400,000, got {result}"
+
+
+
 
 
 

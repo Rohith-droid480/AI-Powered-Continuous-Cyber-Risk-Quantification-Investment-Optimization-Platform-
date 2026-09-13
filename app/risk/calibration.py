@@ -162,6 +162,20 @@ def calculate_secondary_loss(
     return float(primary_loss) * float(secondary_ratio)
 
 
+def calculate_loss_magnitude(primary_loss: float, secondary_loss: float) -> float:
+    """
+    Calculate total Loss Magnitude.
+    
+    Formula: Loss Magnitude = Primary Loss + Secondary Loss
+    
+    :param primary_loss: Expected Primary Loss in INR (₹).
+    :param secondary_loss: Expected Secondary Loss in INR (₹).
+    :return: Total Loss Magnitude in INR (₹).
+    """
+    return float(primary_loss) + float(secondary_loss)
+
+
+
 
 
 
