@@ -36,3 +36,13 @@ def test_vuln_hand_computable():
     assert pytest.approx(result, abs=1e-3) == 0.667, f"Expected approx 0.667, got {result}"
 
 
+def test_tef_hand_computable():
+    """
+    Test TEF - Base contact rate = 2.0 events/year, exposure factor = 0.5 -> Expected TEF = 1.0 event/year
+    """
+    from app.risk.calibration import calculate_tef
+    result = calculate_tef(base_contact_rate=2.0, exposure_factor=0.5)
+    assert result == 1.0, f"Expected TEF of 1.0 event/year, got {result}"
+
+
+

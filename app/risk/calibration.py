@@ -79,3 +79,17 @@ def calculate_vuln(t_cap: float, rs: float) -> float:
     return float(t_cap) / denominator
 
 
+def calculate_tef(base_contact_rate: float, exposure_factor: float) -> float:
+    """
+    Calculate Threat Event Frequency (TEF).
+    
+    Formula: TEF = base contact rate * asset internet-exposure factor
+    
+    :param base_contact_rate: Base annual contact rate in events/year.
+    :param exposure_factor: Internet exposure factor multiplier (0.0 to 1.0+).
+    :return: TEF float value in events/year.
+    """
+    return float(base_contact_rate) * float(exposure_factor)
+
+
+
