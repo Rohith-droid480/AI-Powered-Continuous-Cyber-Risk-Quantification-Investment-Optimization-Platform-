@@ -54,5 +54,18 @@ def test_lef_hand_computable():
     assert result == 0.5, f"Expected LEF of 0.5 loss events/year, got {result}"
 
 
+def test_primary_loss_hand_computable():
+    """
+    Test Primary Loss calibration using IBM India 2026 value mu_X = ₹255,000,000 and CV_X = 2.0.
+    Expected LogNormal mu approx 18.5520, sigma approx 1.2686, expected primary loss ₹255,000,000.
+    """
+    from app.risk.calibration import calibrate_primary_loss
+    mu, sigma, exp_loss = calibrate_primary_loss(mean_loss=255_000_000.0, cv_loss=2.0)
+    assert pytest.approx(mu, abs=1e-3) == 18.5520, f"Expected mu approx 18.5520, got {mu}"
+    assert pytest.approx(sigma, abs=1e-3) == 1.2686, f"Expected sigma approx 1.2686, got {sigma}"
+    assert exp_loss == 255_000_000.0, f"Expected expected primary loss ₹255,000,000, got {exp_loss}"
+
+
+
 
 

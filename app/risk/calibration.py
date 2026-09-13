@@ -109,5 +109,40 @@ def calculate_lef(tef: float, vuln: float) -> float:
     return float(tef) * float(vuln)
 
 
+def calibrate_primary_loss(
+    mean_loss: float = 255_000_000.0,
+    cv_loss: float = 2.0
+) -> Tuple[float, float, float]:
+    """
+    Calibrate LogNormal parameters (mu, sigma) for Primary Loss.
+    
+    Primary Loss ~ LogNormal(mu, sigma)
+    
+    Calibration Inputs:
+    - mean_loss (mu_X): ₹255,000,000 (IBM India 2026 all-sector mean breach cost in INR).
+    - cv_loss (CV_X): 2.0 (coefficient of variation assumption within empirical 1.5-2.5 range).
+    
+    Equations:
+    - sigma^2 = ln(1 + CV_X^2) = ln(1 + 4) = ln(5) => sigma = sqrt(ln(5)) approx 1.2686
+    - mu = ln(mu_X) - 0.5 * sigma^2 = ln(255,000,000) - 0.5 * ln(5) approx 18.5520
+    - E[Primary Loss] = exp(mu + 0.5 * sigma^2) = mu_X = ₹255,000,000
+    
+    :param mean_loss: Mean breach loss in INR (₹).
+    :param cv_loss: Coefficient of variation (dimensionless).
+    :return: Tuple of (mu, sigma, expected_primary_loss) in INR (₹).
+    """
+    # CV_X = 2.0 is our modeling assumption, while mu_X = ₹255,000,000 is the directly sourced IBM India value.
+    mu_x = float(mean_loss)
+    cv_x = float(cv_loss)
+    
+    sigma_sq = math.log(1.0 + cv_x ** 2)
+    sigma = math.sqrt(sigma_sq)
+    mu = math.log(mu_x) - 0.5 * sigma_sq
+    expected_primary_loss = mu_x
+    
+    return mu, sigma, expected_primary_loss
+
+
+
 
 
