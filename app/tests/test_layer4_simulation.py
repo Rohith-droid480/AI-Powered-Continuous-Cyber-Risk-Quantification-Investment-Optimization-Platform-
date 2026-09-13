@@ -139,3 +139,31 @@ def test_layer4_multi_vulnerability_aggregation():
     # Assert simulated EAL matches total analytical EAL within ±3%
     assert pytest.approx(results.eal, rel=0.03) == total_analytical_eal
 
+
+def test_layer4_simulation_failed_state():
+    """
+    Failure State Test (Step 12):
+    Verifies SIMULATION_FAILED JobStatus is returned on invalid inputs without crashing.
+    """
+    # Case A: Empty list
+    results, err = run_monte_carlo_simulation([], num_iterations=100_000, job_id="job_empty")
+    assert results is None
+    assert err is not None
+    assert err.status == JobStatusEnum.SIMULATION_FAILED
+    assert "empty" in err.message.lower()
+    
+    # Case B: Negative LEF
+    v_invalid = EnrichedVulnerability(
+        cve_id="CVE-2021-44228", plugin_id="1", plugin_name="Bad", host="10.0.0.1", port=80, protocol="tcp",
+        severity=4, description="Bad", cvss_score=10.0, epss_score=0.97, is_kev=True, enrichment_status=EnrichmentStatus.FULL
+    )
+    rec_invalid = calibrate_vulnerability_risk(v_invalid, rs=0.5, base_contact_rate=1.5, exposure_factor=0.5)
+    rec_invalid.lef = -0.5  # Forced invalid LEF
+    
+    results, err = run_monte_carlo_simulation([rec_invalid], num_iterations=100_000, job_id="job_neg_lef")
+    assert results is None
+    assert err is not None
+    assert err.status == JobStatusEnum.SIMULATION_FAILED
+    assert "invalid record parameters" in err.message.lower()
+
+
