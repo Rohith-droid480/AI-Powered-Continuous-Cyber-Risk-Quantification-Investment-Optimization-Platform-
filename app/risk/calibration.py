@@ -143,6 +143,26 @@ def calibrate_primary_loss(
     return mu, sigma, expected_primary_loss
 
 
+def calculate_secondary_loss(
+    primary_loss: float,
+    secondary_ratio: float = 0.4
+) -> float:
+    """
+    Calculate Secondary Loss based on Primary Loss.
+    
+    :param primary_loss: Expected Primary Loss in INR (₹).
+    :param secondary_ratio: Multiplier for secondary loss exposure. Default is 0.4.
+    :return: Expected Secondary Loss in INR (₹).
+    """
+    # 0.4 is a deliberately conservative illustrative multiplier
+    # representing additional regulatory/reputational exposure (e.g. DPDPA
+    # penalties up to ₹250 crore per docs/research/Cyber_Risk_Loss_Modeling_Research.md)
+    # — it is NOT derived from IBM's published cost-category percentage breakdown,
+    # and must not be described that way in the milestone report or the pitch deck.
+    return float(primary_loss) * float(secondary_ratio)
+
+
+
 
 
 

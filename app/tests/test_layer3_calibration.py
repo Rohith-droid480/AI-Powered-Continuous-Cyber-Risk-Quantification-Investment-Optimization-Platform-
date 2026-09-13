@@ -66,6 +66,16 @@ def test_primary_loss_hand_computable():
     assert exp_loss == 255_000_000.0, f"Expected expected primary loss ₹255,000,000, got {exp_loss}"
 
 
+def test_secondary_loss_hand_computable():
+    """
+    Test Secondary Loss - Primary Loss = ₹1,000,000, Secondary ratio = 0.4 -> Expected Secondary Loss = ₹400,000
+    """
+    from app.risk.calibration import calculate_secondary_loss
+    result = calculate_secondary_loss(primary_loss=1_000_000.0, secondary_ratio=0.4)
+    assert result == 400_000.0, f"Expected ₹400,000, got {result}"
+
+
+
 
 
 
