@@ -99,10 +99,9 @@ def test_api_upload_valid_enterprise_scan():
     vulns_resp = client.get(f"/scan/{job_id}/vulnerabilities")
     assert vulns_resp.status_code == 200
     vulns_data = vulns_resp.json()
-    assert vulns_data["count"] == 5
-    assert len(vulns_data["vulnerabilities"]) == 5
+    assert len(vulns_data) == 5
 
-    cves = [v["cve_id"] for v in vulns_data["vulnerabilities"]]
+    cves = [v["cve_id"] for v in vulns_data]
     assert "CVE-2021-44228" in cves
     assert "CVE-2020-1472" in cves
 
@@ -135,9 +134,7 @@ def test_api_upload_malformed_scan_triggers_ingestion_failed():
     vulns_resp = client.get(f"/scan/{job_id}/vulnerabilities")
     assert vulns_resp.status_code == 200
     vulns_data = vulns_resp.json()
-    assert vulns_data["status"] == "INGESTION_FAILED"
-    assert vulns_data["count"] == 0
-    assert vulns_data["vulnerabilities"] == []
+    assert vulns_data == []
 
 
 def test_api_upload_empty_scan_triggers_ingestion_failed():

@@ -120,7 +120,7 @@ class JobManager:
             self.update_job(
                 job_id=job_id,
                 status=JobStatusEnum.PARSED,
-                message=f"Successfully parsed and enriched {len(enriched_vulns)} vulnerabilities from scan.",
+                message=f"Successfully parsed {len(enriched_vulns)} vulnerabilities from scan.",
                 vulnerabilities=enriched_vulns,
             )
             logger.info(
