@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any, Optional, List
 
 from app.schemas.models import (
@@ -16,6 +17,15 @@ app = FastAPI(
     version="0.1.0",
     description="Backend API for scan upload, async ingestion, risk simulation, and patch optimization.",
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 
 @app.get("/")
