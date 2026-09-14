@@ -96,10 +96,83 @@ async def get_parsed_vulnerabilities(job_id: str) -> List[EnrichedVulnerability]
 
 
 @app.get("/scan/{job_id}/results", status_code=status.HTTP_200_OK)
-async def get_scan_results(job_id: str) -> Dict[str, Any]:
+async def get_scan_results(
+    job_id: str,
+    budget: float = 150000.0,
+) -> Dict[str, Any]:
     """
-    GET /scan/{job_id}/results - Returns stub risk quantification and optimization results.
+    GET /scan/{job_id}/results - Returns risk quantification and patch optimization results.
+    Executes real Layer 3 calibration, Layer 4 Monte Carlo simulation, and Layer 5 optimization
+    when an actual parsed job is requested.
     """
+    job = job_manager.get_job(job_id)
+
+    # If job exists and has processed vulnerabilities, execute real pipeline
+    if job is not None:
+        if job.status == JobStatusEnum.INGESTION_FAILED:
+            return {
+                "job_id": job_id,
+                "status": JobStatusEnum.INGESTION_FAILED.value,
+                "message": job.message or "Ingestion failed.",
+            }
+
+        if job.enriched_vulnerabilities:
+            from app.risk.calibration import calibrate_vulnerability_risk
+            from app.simulation.engine import run_monte_carlo_simulation
+            from app.optimization.optimizer import optimize_patch_investments
+
+            records = [calibrate_vulnerability_risk(e) for e in job.enriched_vulnerabilities]
+
+            # Baseline Layer 4 Simulation
+            sim_results, sim_err = run_monte_carlo_simulation(
+                risk_records=records,
+                num_iterations=100000,
+                job_id=f"{job_id}_sim",
+                seed=42,
+            )
+            if sim_err:
+                return {
+                    "job_id": job_id,
+                    "status": JobStatusEnum.SIMULATION_FAILED.value,
+                    "message": sim_err.message,
+                }
+
+            # Layer 5 Optimization
+            opt_results, opt_err = optimize_patch_investments(
+                risk_records=records,
+                budget=budget,
+                job_id=f"{job_id}_opt",
+                seed=42,
+            )
+            if opt_err:
+                return {
+                    "job_id": job_id,
+                    "status": JobStatusEnum.OPTIMIZATION_UNAVAILABLE.value,
+                    "message": opt_err.message,
+                    "simulation_results": sim_results.model_dump() if sim_results else None,
+                }
+
+            # Post-optimization simulation distribution for Loss Exceedance Curve
+            remaining = [r for r in records if r.vulnerability.cve_id not in opt_results.selected_cves]
+            post_sim_results = None
+            if remaining:
+                post_sim_results, _ = run_monte_carlo_simulation(
+                    risk_records=remaining,
+                    num_iterations=100000,
+                    job_id=f"{job_id}_post_sim",
+                    seed=42,
+                )
+
+            return {
+                "job_id": job_id,
+                "status": JobStatusEnum.COMPLETED.value,
+                "simulation_results": sim_results.model_dump() if sim_results else None,
+                "optimization_results": opt_results.model_dump() if opt_results else None,
+                "post_opt_simulation_results": post_sim_results.model_dump() if post_sim_results else None,
+                "vulnerabilities": [ev.model_dump() for ev in job.enriched_vulnerabilities],
+            }
+
+    # Backward-compatible stub fallback
     stub_sim_results = SimulationResults(
         job_id=job_id,
         eal=150000.0,
@@ -139,3 +212,4 @@ async def get_scan_results(job_id: str) -> Dict[str, Any]:
         "simulation_results": stub_sim_results.model_dump(),
         "optimization_results": stub_opt_results.model_dump(),
     }
+
