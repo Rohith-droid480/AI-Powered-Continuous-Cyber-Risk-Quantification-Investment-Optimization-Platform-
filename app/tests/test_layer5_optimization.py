@@ -1,4 +1,8 @@
 import pytest
+from pathlib import Path
+from app.ingestion.parser import parse_nessus_xml
+from app.enrichment.enrichment import enrich_vulnerabilities
+from app.risk.calibration import calibrate_vulnerability_risk
 from app.optimization.optimizer import calculate_patch_cost, optimize_patch_investments
 from app.schemas.models import (
     ParsedVulnerability,
@@ -8,6 +12,8 @@ from app.schemas.models import (
     JobStatusEnum,
     OptimizationResults,
 )
+
+SAMPLE_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "sample-data"
 
 
 def _make_dummy_record(
@@ -55,10 +61,6 @@ def test_layer5_patch_cost_calculation_tiers():
     TEST 1 — COST TIERS
     Verifies exact remediation costs for Critical, High, Medium, and Low CVSS tiers
     with hourly_rate = ₹2,000/hr.
-    - Critical (CVSS >= 9.0): 40 hrs * 2000 = ₹80,000
-    - High (7.0 <= CVSS < 9.0): 16 hrs * 2000 = ₹32,000
-    - Medium (4.0 <= CVSS < 7.0): 8 hrs * 2000 = ₹16,000
-    - Low (CVSS < 4.0): 4 hrs * 2000 = ₹8,000
     """
     rate = 2000.0
 
@@ -86,27 +88,7 @@ def test_layer5_patch_cost_calculation_tiers():
 def test_layer5_delta_eal_knapsack_optimization():
     """
     TEST 2 — ΔEAL OBJECTIVE / KNAPSACK
-    Creates 3 toy vulnerabilities:
-    - CVE-A: cost = ₹80,000 (CVSS 10.0), Delta EAL = ₹100,000,000 (LEF=0.5, ExpLoss=200M)
-    - CVE-B: cost = ₹32,000 (CVSS 8.0), Delta EAL = ₹60,000,000  (LEF=0.3, ExpLoss=200M)
-    - CVE-C: cost = ₹16,000 (CVSS 5.0), Delta EAL = ₹20,000,000  (LEF=0.1, ExpLoss=200M)
-
-    Budget = ₹112,000
-    Optimal combination: CVE-A + CVE-C (Cost = ₹96,000, Total Delta EAL = ₹120M).
-    CVE-A + CVE-B requires ₹112,000 but yields ₹160M? Wait:
-    Cost A + B = 80,000 + 32,000 = 112,000 (Delta EAL = 160M).
-    Let's adjust costs/budget so the 0/1 Knapsack choice is unambiguous and strictly tests capacity:
-    CVE-A: cost = ₹80,000, Delta EAL = ₹100,000,000
-    CVE-B: cost = ₹32,000, Delta EAL = ₹60,000,000
-    CVE-C: cost = ₹16,000, Delta EAL = ₹20,000,000
-    Budget = ₹40,000:
-    Can buy: B (cost 32k, EAL 60M) vs C (cost 16k, EAL 20M). Optimal: ['CVE-B'].
-    Budget = ₹96,000:
-    Option 1: A + C -> cost 96k, Delta EAL = 120M
-    Option 2: B + C -> cost 48k, Delta EAL = 80M
-    Option 3: A alone -> cost 80k, Delta EAL = 100M
-    Option 4: A + B -> cost 112k (> 96k, infeasible)
-    Optimal for budget ₹96,000 is ['CVE-A', 'CVE-C'] with cost ₹96,000 and Delta EAL = ₹120M!
+    Creates 3 toy vulnerabilities and verifies PuLP 0/1 Knapsack selection.
     """
     cve_a = _make_dummy_record("CVE-A", cvss_score=10.0, lef=0.5, expected_loss_magnitude=200_000_000.0) # cost=80k, EAL=100M
     cve_b = _make_dummy_record("CVE-B", cvss_score=8.0, lef=0.3, expected_loss_magnitude=200_000_000.0)  # cost=32k, EAL=60M
@@ -127,9 +109,7 @@ def test_layer5_delta_eal_knapsack_optimization():
 def test_layer5_optimization_failure_states():
     """
     TEST 3 — FAILURE STATES
-    Tests graceful failure handling for:
-    - Negative budget (< 0) -> OPTIMIZATION_UNAVAILABLE
-    - Empty risk_records list -> OPTIMIZATION_UNAVAILABLE
+    Tests graceful failure handling for negative budget and empty input list.
     """
     cve_a = _make_dummy_record("CVE-A", cvss_score=10.0, lef=0.5, expected_loss_magnitude=200_000_000.0)
 
@@ -151,14 +131,12 @@ def test_layer5_optimization_failure_states():
 def test_layer5_post_optimization_resimulation():
     """
     TEST 4 — POST-OPTIMIZATION RE-SIMULATION
-    Verifies that selected CVEs are removed from post-optimization Monte Carlo re-simulation
-    and unselected CVEs remain, populating post_opt_eal, post_opt_var_95, and post_opt_cvar_95.
+    Verifies that selected CVEs are removed from post-optimization Monte Carlo re-simulation.
     """
     cve_a = _make_dummy_record("CVE-A", cvss_score=10.0, lef=0.5, expected_loss_magnitude=200_000_000.0) # cost=80k
     cve_b = _make_dummy_record("CVE-B", cvss_score=5.0, lef=0.2, expected_loss_magnitude=100_000_000.0)  # cost=16k
 
     records = [cve_a, cve_b]
-    # Budget = 20,000 (enough only for CVE-B)
     budget = 20_000.0
 
     results, err = optimize_patch_investments(records, budget=budget, num_iterations=10_000, seed=42)
@@ -166,9 +144,6 @@ def test_layer5_post_optimization_resimulation():
     assert err is None
     assert results.selected_cves == ["CVE-B"]
     assert results.total_cost == 16_000.0
-    
-    # Remaining unpatched vulnerability is CVE-A (LEF=0.5, ExpLoss=200M -> Baseline EAL = 100M)
-    # Post-opt Monte Carlo EAL should be near ~100M (re-simulating CVE-A alone)
     assert results.post_opt_eal > 0.0
     assert results.post_opt_var_95 > 0.0
     assert results.post_opt_cvar_95 >= results.post_opt_var_95
@@ -177,11 +152,6 @@ def test_layer5_post_optimization_resimulation():
 def test_layer5_objective_traceability_not_cvss():
     """
     TEST 5 — OBJECTIVE TRACEABILITY
-    Constructs two vulnerabilities:
-    - CVE-HIGH-CVSS: CVSS = 10.0 (cost = ₹80,000), Delta EAL = ₹10,000,000 (LEF=0.05, ExpLoss=200M)
-    - CVE-HIGH-DEAL: CVSS = 5.0  (cost = ₹16,000), Delta EAL = ₹100,000,000 (LEF=0.50, ExpLoss=200M)
-
-    Budget = ₹50,000 (can only afford CVE-HIGH-DEAL at ₹16,000, or neither).
     Proves that the optimizer selects CVE-HIGH-DEAL due to higher Delta EAL, ignoring higher CVSS severity.
     """
     cve_high_cvss = _make_dummy_record("CVE-HIGH-CVSS", cvss_score=10.0, lef=0.05, expected_loss_magnitude=200_000_000.0)
@@ -196,3 +166,32 @@ def test_layer5_objective_traceability_not_cvss():
     assert results.selected_cves == ["CVE-HIGH-DEAL"]
     assert results.total_cost == 16_000.0
     assert "CVE-HIGH-CVSS" not in results.selected_cves
+
+
+def test_layer5_real_data_integration():
+    """
+    TEST 6 — REAL DATA INTEGRATION
+    Runs full Layer 1 -> Layer 2 -> Layer 3 -> Layer 5 optimization on enterprise_perimeter_scan.nessus.
+    """
+    scan_file = SAMPLE_DATA_DIR / "enterprise_perimeter_scan.nessus"
+    assert scan_file.exists()
+
+    with open(scan_file, "rb") as f:
+        file_bytes = f.read()
+
+    parsed = parse_nessus_xml(file_bytes)
+    enriched = enrich_vulnerabilities(parsed)
+    records = [calibrate_vulnerability_risk(e) for e in enriched]
+
+    demo_budget = 150_000.0
+    opt_res, opt_err = optimize_patch_investments(records, budget=demo_budget, seed=42)
+
+    assert opt_err is None
+    assert isinstance(opt_res, OptimizationResults)
+    assert opt_res.budget == 150_000.0
+    assert opt_res.total_cost <= demo_budget
+    assert opt_res.total_cost == 120_000.0
+    assert set(opt_res.selected_cves) == {"CVE-2008-5161", "CVE-2020-1472", "CVE-2021-41773"}
+    assert opt_res.post_opt_eal > 0.0
+    assert opt_res.post_opt_var_95 > 0.0
+    assert opt_res.post_opt_cvar_95 >= opt_res.post_opt_var_95
