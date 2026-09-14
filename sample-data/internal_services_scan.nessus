@@ -1,0 +1,33 @@
+<?xml version="1.0" ?>
+<NessusClientData_v2>
+  <Policy>
+    <policyName>Internal Infrastructure Audit</policyName>
+  </Policy>
+  <Report name="Internal Infrastructure Assessment">
+    <ReportHost name="10.0.0.15">
+      <HostProperties>
+        <tag name="host-ip">10.0.0.15</tag>
+        <tag name="host-fqdn">svc-cluster-node1.internal.corp</tag>
+        <tag name="operating-system">Ubuntu 22.04 LTS</tag>
+      </HostProperties>
+      <ReportItem port="443" svc_name="https" protocol="tcp" severity="3" pluginID="178901" pluginName="Apple WebKit / Kernel State Elevation of Privilege" pluginFamily="General">
+        <description>An issue in state management allows an app to modify sensitive kernel state. Apple addressed this issue with improved state management.</description>
+        <cve>CVE-2023-38606</cve>
+        <cvss_base_score>7.8</cvss_base_score>
+        <solution>Update to the latest supported security patch release.</solution>
+      </ReportItem>
+      <ReportItem port="8443" svc_name="https-alt" protocol="tcp" severity="3" pluginID="166820" pluginName="OpenSSL 3.0.x &lt; 3.0.7 Multiple Vulnerabilities" pluginFamily="Web Servers">
+        <description>A buffer overrun can be triggered in X.509 certificate verification, specifically in name constraint checking. Note that this occurs after certificate chain signature verification and requires either a CA to have signed the malicious certificate or for the application to continue certificate verification despite failure to construct a path to a trusted issuer.</description>
+        <cve>CVE-2022-3602</cve>
+        <cvss_base_score>7.5</cvss_base_score>
+        <solution>Upgrade to OpenSSL version 3.0.7 or later.</solution>
+      </ReportItem>
+      <ReportItem port="80" svc_name="http" protocol="tcp" severity="4" pluginID="181344" pluginName="libwebp Heap Buffer Overflow (WebP 0day)" pluginFamily="Web Servers">
+        <description>Heap buffer overflow in libwebp in Google Chrome prior to 116.0.5845.187 and libwebp prior to 1.3.2 allowed a remote attacker to potentially perform an out of bounds memory write via a crafted HTML page.</description>
+        <cve>CVE-2023-4863</cve>
+        <cvss_base_score>8.8</cvss_base_score>
+        <solution>Upgrade libwebp to 1.3.2 or upgrade browser packages to latest versions.</solution>
+      </ReportItem>
+    </ReportHost>
+  </Report>
+</NessusClientData_v2>
