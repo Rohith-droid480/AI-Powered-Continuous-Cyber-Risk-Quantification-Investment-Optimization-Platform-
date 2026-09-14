@@ -22,6 +22,58 @@ from app.schemas.models import (
 )
 
 
+def _simulate_events(
+    risk_records: List[CalibratedRiskRecord],
+    num_iterations: int,
+    rng: np.random.Generator,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Internal pure function performing event generation, attribution, and trial mapping.
+    
+    :param risk_records: Validated list of CalibratedRiskRecord objects.
+    :param num_iterations: Number of simulation trial years.
+    :param rng: NumPy Random Generator instance (np.random.default_rng).
+    :return: Tuple of (sampled_vuln_indices, primary_losses, iteration_indices)
+    """
+    lefs = [float(rec.lef) for rec in risk_records]
+    mus = [float(rec.primary_loss_mu) for rec in risk_records]
+    sigmas = [float(rec.primary_loss_sigma) for rec in risk_records]
+    
+    total_lef = sum(lefs)
+    
+    # Draw Poisson event counts N_j for all num_iterations in one vectorized call
+    event_counts = rng.poisson(lam=total_lef, size=num_iterations)
+    total_events = int(np.sum(event_counts))
+    
+    if total_events == 0:
+        return (
+            np.array([], dtype=np.int64),
+            np.array([], dtype=np.float64),
+            np.array([], dtype=np.int64),
+        )
+    
+    # Sample relative vulnerability assignments for all total_events
+    probs = np.array(lefs, dtype=np.float64) / total_lef
+    num_vulns = len(risk_records)
+    
+    if num_vulns == 1:
+        sampled_vuln_indices = np.zeros(total_events, dtype=np.int64)
+    else:
+        sampled_vuln_indices = rng.choice(num_vulns, size=total_events, p=probs)
+    
+    # Gather per-event LogNormal parameters
+    sampled_mus = np.array(mus, dtype=np.float64)[sampled_vuln_indices]
+    sampled_sigmas = np.array(sigmas, dtype=np.float64)[sampled_vuln_indices]
+    
+    # Draw LogNormal primary losses for all total_events in one call
+    primary_losses = rng.lognormal(mean=sampled_mus, sigma=sampled_sigmas)
+    
+    # Map each event to its iteration index using np.repeat
+    iteration_indices = np.repeat(np.arange(num_iterations, dtype=np.int64), event_counts)
+    
+    return sampled_vuln_indices, primary_losses, iteration_indices
+
+
 def run_monte_carlo_simulation(
     risk_records: List[CalibratedRiskRecord],
     num_iterations: int = 100_000,
@@ -53,23 +105,15 @@ def run_monte_carlo_simulation(
                 message=f"Invalid record parameters at index {idx}: LEF={rec.lef}, mu={rec.primary_loss_mu}, sigma={rec.primary_loss_sigma}",
             )
     
-    # 2. Extract per-CVE risk summaries and arrays
-    cve_ids = []
-    lefs = []
-    mus = []
-    sigmas = []
+    # 2. Extract per-CVE risk summaries
     per_cve_summaries = []
+    total_lef = sum(rec.lef for rec in risk_records)
     
     for rec in risk_records:
         cve_id = rec.vulnerability.cve_id
         lef = float(rec.lef)
         exp_loss = float(rec.expected_loss_magnitude)
         baseline_eal = lef * exp_loss
-        
-        cve_ids.append(cve_id)
-        lefs.append(lef)
-        mus.append(float(rec.primary_loss_mu))
-        sigmas.append(float(rec.primary_loss_sigma))
         
         per_cve_summaries.append(
             PerCveRiskSummary(
@@ -80,7 +124,6 @@ def run_monte_carlo_simulation(
             )
         )
     
-    total_lef = sum(lefs)
     if total_lef <= 0:
         # Zero risk events
         return SimulationResults(
@@ -97,36 +140,21 @@ def run_monte_carlo_simulation(
     # No Python for-loop iterates over the 100,000 simulation trials.
     rng = np.random.default_rng(seed)
     
-    # Draw Poisson event counts N_j for all num_iterations in one vectorized call
-    event_counts = rng.poisson(lam=total_lef, size=num_iterations)
-    total_events = int(np.sum(event_counts))
+    sampled_vuln_indices, primary_losses, iteration_indices = _simulate_events(
+        risk_records=risk_records,
+        num_iterations=num_iterations,
+        rng=rng,
+    )
     
-    if total_events == 0:
+    if len(primary_losses) == 0:
         annual_losses = np.zeros(num_iterations, dtype=np.float64)
     else:
-        # Sample relative vulnerability assignments for all total_events
-        probs = np.array(lefs, dtype=np.float64) / total_lef
-        num_vulns = len(risk_records)
-        
-        if num_vulns == 1:
-            sampled_vuln_indices = np.zeros(total_events, dtype=np.int64)
-        else:
-            sampled_vuln_indices = rng.choice(num_vulns, size=total_events, p=probs)
-        
-        # Gather per-event LogNormal parameters
-        sampled_mus = np.array(mus, dtype=np.float64)[sampled_vuln_indices]
-        sampled_sigmas = np.array(sigmas, dtype=np.float64)[sampled_vuln_indices]
-        
-        # Draw LogNormal primary losses for all total_events in one call
-        primary_losses = rng.lognormal(mean=sampled_mus, sigma=sampled_sigmas)
-        
         # Traceability to Layer 3 formulas:
         # secondary_loss = 0.4 * primary_loss   # matches Layer 3's calculate_secondary_loss formula exactly
         # total_loss = primary_loss + secondary_loss   # = 1.4 * primary_loss
         event_losses = primary_losses * 1.4
         
         # Map each event to its iteration index using np.repeat and aggregate with np.bincount
-        iteration_indices = np.repeat(np.arange(num_iterations, dtype=np.int64), event_counts)
         annual_losses = np.bincount(iteration_indices, weights=event_losses, minlength=num_iterations)
     
     # 3. Compute summary metrics from 100,000 trial annual losses

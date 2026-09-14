@@ -78,7 +78,7 @@ class JobStatus(BaseModel):
    - Negative LEF $\rightarrow$ returned `JobStatus(status=SIMULATION_FAILED, message="Invalid record parameters...")` ✓
 
 5. **Event Attribution Ratio Test (`test_layer4_event_attribution_ratio`)**:
-   - Verification of Approach A (Poisson Superposition Theorem with categorical sampling across 100,000 trials, `seed=42`):
+   - Refactored to call `engine._simulate_events` directly, directly inspecting internal output arrays:
      - **Total events drawn**: **70,324** events
      - **Events attributed to Vuln 1 ($\text{LEF}_1 = 0.5$)**: **50,123** (**71.27%**)
      - **Events attributed to Vuln 2 ($\text{LEF}_2 = 0.2$)**: **20,201** (**28.73%**)
@@ -117,9 +117,10 @@ None — matches spec exactly.
 
 ### 6. Open questions / methodological uncertainty
 
-- **Allocation Approach (Approach A — Poisson Superposition Theorem)**: The engine draws $N \sim \text{Poisson}(\sum \text{LEF}_k)$ for 100,000 trials and assigns each event to vulnerability $k$ with probability $p_k = \frac{\text{LEF}_k}{\sum \text{LEF}}$. Each sampled event draws its loss from vulnerability $k$'s exact $(\mu_k, \sigma_k)$ parameters. Multiple vulnerabilities' parameters are **never blended or averaged**.
+- **Allocation Approach (Approach A — Poisson Superposition Theorem)**: The engine draws $N \sim \text{Poisson}(\sum \text{LEF}_k)$ for 100,000 trials and assigns each event to vulnerability $k$ with probability $p_k = \frac{\text{LEF}_k}{\sum \text{LEF}}$. Refactored internal helper `_simulate_events` returns `(sampled_vuln_indices, primary_losses, iteration_indices)` directly, and `test_layer4_event_attribution_ratio` asserts on its real returned output.
+- **Trial Year Aggregation (`np.bincount`)**: Events are mapped back to trial years via `iteration_indices = np.repeat(np.arange(num_iterations), event_counts)` and aggregated in a single C-speed operation `annual_losses = np.bincount(iteration_indices, weights=event_losses, minlength=num_iterations)`.
 - **Secondary Loss Formula Traceability**: Secondary loss is computed per event draw as `secondary_loss = 0.4 * primary_loss` (matching Layer 3's `calculate_secondary_loss` formula exactly), resulting in `total_loss = primary_loss + secondary_loss = 1.4 * primary_loss`.
-- **Monte Carlo Variance**: 100,000 iterations yield an EAL sampling tolerance of approximately $\pm 2\%$, which is mathematically expected for heavy-tailed LogNormal distributions ($\sigma \approx 1.2686$).
+
 
 
 ---
