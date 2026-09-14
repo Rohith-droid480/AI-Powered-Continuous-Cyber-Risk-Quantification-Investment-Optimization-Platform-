@@ -146,7 +146,7 @@ def optimize_patch_investments(
         prob = pulp.LpProblem("Patch_Investment_Optimization", pulp.LpMaximize)
 
         # Binary decision variables x_c in {0, 1}
-        x_vars = {cve: pulp.LpVariable(f"x_{i}", cat=pulp.LpBinary) for i, cve in enumerate(cve_ids)}
+        x_vars = {cve: prob.add_variable(f"x_{i}", lowBound=0, upBound=1, cat=pulp.LpBinary) for i, cve in enumerate(cve_ids)}
 
         # Objective: Maximize total Delta EAL
         prob += pulp.lpSum([cve_data[cve]["delta_eal"] * x_vars[cve] for cve in cve_ids]), "Total_Delta_EAL"
