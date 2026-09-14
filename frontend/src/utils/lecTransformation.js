@@ -1,109 +1,79 @@
 /**
- * Pure statistical utility to compute empirical Loss Exceedance Curve (CCDF) data points
- * for Recharts from raw Monte Carlo loss distribution arrays.
+ * Lightweight frontend formatting and alignment utility for Loss Exceedance Curve (CCDF) points.
  *
- * Mathematical definition:
- * - X axis = Loss Magnitude S (in INR / ₹)
- * - Y axis = Exceedance Probability P(Loss >= S) in percentage (0% to 100%)
- * - Derived directly as empirical Complementary Cumulative Distribution Function (CCDF).
+ * Primary mode: Consumes compact backend-generated LEC coordinate arrays ({ loss, exceedance_probability }).
+ * Fallback mode: Processes raw distribution arrays if provided.
  */
 
 export function computeLossExceedancePoints(
-  baselineDistribution = [],
-  postOptDistribution = [],
-  maxPoints = 60
+  baselineLecOrDist = [],
+  postOptLecOrDist = []
 ) {
-  if (!baselineDistribution || baselineDistribution.length === 0) {
+  if (!baselineLecOrDist || baselineLecOrDist.length === 0) {
     return [];
   }
 
-  // 1. Process Baseline Distribution
-  const sortedBaseline = [...baselineDistribution].sort((a, b) => a - b);
-  const nBase = sortedBaseline.length;
+  // Check if inputs are already compact coordinate objects { loss, exceedance_probability }
+  const isCompactBaseline = typeof baselineLecOrDist[0] === 'object' && baselineLecOrDist[0] !== null && 'exceedance_probability' in baselineLecOrDist[0];
+  const isCompactPost = postOptLecOrDist && postOptLecOrDist.length > 0 && typeof postOptLecOrDist[0] === 'object' && postOptLecOrDist[0] !== null && 'exceedance_probability' in postOptLecOrDist[0];
 
-  const baselinePoints = downsampleDistribution(sortedBaseline, nBase, maxPoints);
+  if (isCompactBaseline) {
+    // 1. Process Compact Backend Points directly (Zero heavy browser sorting)
+    const postMap = new Map();
+    if (isCompactPost) {
+      postOptLecOrDist.forEach((p) => {
+        postMap.set(p.loss, p.exceedance_probability);
+      });
+    }
 
-  // 2. Process Post-Opt Distribution if available
-  let postOptPointsMap = new Map();
-  if (postOptDistribution && postOptDistribution.length > 0) {
-    const sortedPost = [...postOptDistribution].sort((a, b) => a - b);
-    const nPost = sortedPost.length;
-    const rawPostPoints = downsampleDistribution(sortedPost, nPost, maxPoints);
-    
-    // Create interpolation map for matching loss values
-    rawPostPoints.forEach(p => {
-      postOptPointsMap.set(p.loss, p.prob);
+    return baselineLecOrDist.map((basePt) => {
+      const lossVal = basePt.loss;
+      let postProb = null;
+
+      if (isCompactPost) {
+        postProb = interpolateCompactProb(postOptLecOrDist, lossVal);
+      }
+
+      return {
+        loss: lossVal,
+        lossFormatted: formatCurrencyShort(lossVal),
+        baselineProb: Number(basePt.exceedance_probability.toFixed(2)),
+        postOptProb: postProb !== null ? Number(postProb.toFixed(2)) : null,
+      };
     });
   }
 
-  // 3. Align and construct combined chart points
-  const points = baselinePoints.map((basePt) => {
-    const lossVal = basePt.loss;
-    let postProb = null;
+  // 2. Fallback for raw numerical arrays if passed
+  const sortedBaseline = [...baselineLecOrDist].sort((a, b) => a - b);
+  const nBase = sortedBaseline.length;
 
-    if (postOptDistribution && postOptDistribution.length > 0) {
-      const sortedPost = [...postOptDistribution].sort((a, b) => a - b);
-      postProb = interpolateExceedanceProb(sortedPost, lossVal);
-    }
-
+  return sortedBaseline.map((val, idx) => {
+    const prob = ((nBase - idx) / nBase) * 100;
     return {
-      loss: lossVal,
-      lossFormatted: formatCurrencyShort(lossVal),
-      baselineProb: Number(basePt.prob.toFixed(2)),
-      postOptProb: postProb !== null ? Number(postProb.toFixed(2)) : null,
+      loss: val,
+      lossFormatted: formatCurrencyShort(val),
+      baselineProb: Number(prob.toFixed(2)),
+      postOptProb: null,
     };
   });
-
-  return points;
 }
 
-function downsampleDistribution(sortedArray, N, targetPoints) {
-  if (N <= targetPoints) {
-    return sortedArray.map((val, idx) => ({
-      loss: val,
-      prob: ((N - idx) / N) * 100,
-    }));
-  }
+function interpolateCompactProb(compactPoints, targetLoss) {
+  if (!compactPoints || compactPoints.length === 0) return 0.0;
+  if (targetLoss <= compactPoints[0].loss) return compactPoints[0].exceedance_probability;
+  if (targetLoss >= compactPoints[compactPoints.length - 1].loss) return compactPoints[compactPoints.length - 1].exceedance_probability;
 
-  const result = [];
-  const step = Math.max(1, Math.floor(N / targetPoints));
-
-  for (let i = 0; i < N; i += step) {
-    const lossVal = sortedArray[i];
-    const probVal = ((N - i) / N) * 100;
-    result.push({ loss: lossVal, prob: probVal });
-  }
-
-  // Include the max value at 0% exceedance
-  const maxLoss = sortedArray[N - 1];
-  if (result.length === 0 || result[result.length - 1].loss !== maxLoss) {
-    result.push({ loss: maxLoss, prob: 0.0 });
-  }
-
-  return result;
-}
-
-function interpolateExceedanceProb(sortedArray, targetLoss) {
-  const N = sortedArray.length;
-  if (N === 0) return 0.0;
-  if (targetLoss <= sortedArray[0]) return 100.0;
-  if (targetLoss >= sortedArray[N - 1]) return 0.0;
-
-  // Binary search for position
-  let low = 0;
-  let high = N - 1;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    if (sortedArray[mid] < targetLoss) {
-      low = mid + 1;
-    } else {
-      high = mid - 1;
+  // Linear interpolation between closest points
+  for (let i = 0; i < compactPoints.length - 1; i++) {
+    const p1 = compactPoints[i];
+    const p2 = compactPoints[i + 1];
+    if (targetLoss >= p1.loss && targetLoss <= p2.loss) {
+      if (p2.loss === p1.loss) return p1.exceedance_probability;
+      const ratio = (targetLoss - p1.loss) / (p2.loss - p1.loss);
+      return p1.exceedance_probability + ratio * (p2.exceedance_probability - p1.exceedance_probability);
     }
   }
-
-  // low is index of first element >= targetLoss
-  const exceedCount = N - low;
-  return (exceedCount / N) * 100;
+  return 0.0;
 }
 
 export function formatCurrency(amount) {

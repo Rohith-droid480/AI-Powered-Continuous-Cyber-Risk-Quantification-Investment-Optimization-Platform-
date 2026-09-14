@@ -210,5 +210,42 @@ def test_layer4_event_attribution_ratio():
     assert pytest.approx(ratio_empirical, rel=0.05) == ratio_expected
 
 
+def test_generate_compact_lec_unit_and_edge_cases():
+    """
+    Unit test for backend generate_compact_lec helper:
+    a. Known small loss distribution [0, 100, 200, 300] CCDF coordinates.
+    b. Points count <= 200.
+    c. Exceedance probabilities within [0.0, 100.0].
+    d. Monotonically non-increasing exceedance probabilities.
+    e. Empty distribution fail-soft behavior.
+    """
+    from app.simulation.engine import generate_compact_lec
+
+    # a. Known small distribution
+    small_dist = [0.0, 100.0, 200.0, 300.0]
+    pts = generate_compact_lec(small_dist, max_points=10)
+    assert len(pts) > 0
+    assert pts[0]["loss"] == 0.0
+    assert pts[0]["exceedance_probability"] == 100.0
+    assert pts[1]["loss"] == 100.0
+    assert pts[1]["exceedance_probability"] == 75.0
+
+    # b. Points count <= 200 on large distribution
+    large_dist = list(np.random.lognormal(mean=18.5, sigma=1.2, size=100_000))
+    pts_large = generate_compact_lec(large_dist, max_points=100)
+    assert len(pts_large) <= 200
+
+    # c & d. Probabilities within [0, 100] and monotonically non-increasing
+    probs = [p["exceedance_probability"] for p in pts_large]
+    assert all(0.0 <= p <= 100.0 for p in probs)
+    for i in range(len(probs) - 1):
+        assert probs[i] >= probs[i + 1], f"Exceedance probability non-monotonic at index {i}: {probs[i]} < {probs[i+1]}"
+
+    # e. Empty fail-soft
+    assert generate_compact_lec([]) == []
+    assert generate_compact_lec(None) == []
+
+
+
 
 

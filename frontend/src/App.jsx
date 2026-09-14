@@ -18,11 +18,11 @@ const INITIAL_DEMO_DATA = {
     eal: 965730769.23,
     var_95: 3129621032.79,
     cvar_95: 5033058626.55,
-    // Generate synthetic 10,000 lognormal sample distribution matching mean ~965M for instant visual preview
-    loss_distribution: Array.from({ length: 10000 }, (_, i) => {
-      const u = (i + 1) / 10001;
-      return Math.exp(18.55 + 1.27 * (Math.log(u / (1 - u)) * 0.6));
-    }),
+    p10: 0.0,
+    p50: 0.0,
+    p90: 1887895475.61,
+    p99: 7210000000.0,
+    loss_distribution: [],
     per_cve_risk: [
       { cve_id: 'CVE-2021-44228', lef: 0.6667, expected_loss_magnitude: 357000000, baseline_eal: 238000000 },
       { cve_id: 'CVE-2021-41773', lef: 0.6667, expected_loss_magnitude: 357000000, baseline_eal: 238000000 },
@@ -50,11 +50,24 @@ const INITIAL_DEMO_DATA = {
     eal: 475454244.15,
     var_95: 1887895475.61,
     cvar_95: 3361113758.92,
-    loss_distribution: Array.from({ length: 10000 }, (_, i) => {
-      const u = (i + 1) / 10001;
-      return Math.exp(17.85 + 1.25 * (Math.log(u / (1 - u)) * 0.6));
-    }),
+    p10: 0.0,
+    p50: 0.0,
+    p90: 1100000000.0,
+    p99: 4500000000.0,
+    loss_distribution: [],
   },
+  baseline_lec: Array.from({ length: 50 }, (_, i) => {
+    const frac = i / 49;
+    const lossVal = Math.exp(15.0 + frac * 6.5);
+    const probVal = (1.0 - frac) * 100.0;
+    return { loss: lossVal, exceedance_probability: probVal };
+  }),
+  post_opt_lec: Array.from({ length: 50 }, (_, i) => {
+    const frac = i / 49;
+    const lossVal = Math.exp(14.5 + frac * 6.2);
+    const probVal = Math.max(0, (1.0 - frac) * 75.0);
+    return { loss: lossVal, exceedance_probability: probVal };
+  }),
   vulnerabilities: [
     { cve_id: 'CVE-2021-44228', plugin_name: 'Apache Log4j RCE', host: '192.168.1.10', port: 443, cvss_score: 10.0, epss_score: 0.97, is_kev: true },
     { cve_id: 'CVE-2021-41773', plugin_name: 'Apache Path Traversal', host: '192.168.1.10', port: 80, cvss_score: 7.5, epss_score: 0.80, is_kev: true },
@@ -261,6 +274,8 @@ export default function App() {
         {/* Visual Centerpiece: Loss Exceedance Curve */}
         <section className="chart-section">
           <LossExceedanceCurve
+            baselineLec={data?.baseline_lec}
+            postOptLec={data?.post_opt_lec}
             simulationResults={data?.simulation_results}
             postOptSimulation={data?.post_opt_simulation_results}
             optimizationResults={data?.optimization_results}

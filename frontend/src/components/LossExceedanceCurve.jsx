@@ -35,7 +35,7 @@ const CustomTooltip = ({ active, payload }) => {
           )}
         </div>
         <p className="tooltip-footnote">
-          Interpretation: Probability that annual loss exceeds {formatCurrencyShort(data.loss)}.
+          Interpretation: Probability that annual breach loss exceeds {formatCurrencyShort(data.loss)}.
         </p>
       </div>
     );
@@ -44,32 +44,39 @@ const CustomTooltip = ({ active, payload }) => {
 };
 
 export default function LossExceedanceCurve({
-  simulationResults,
-  postOptSimulation,
-  optimizationResults,
+  baselineLec = [],
+  postOptLec = [],
+  simulationResults = null,
+  postOptSimulation = null,
+  optimizationResults = null,
 }) {
   const chartData = useMemo(() => {
-    if (!simulationResults || !simulationResults.loss_distribution) return [];
-    return computeLossExceedancePoints(
-      simulationResults.loss_distribution,
-      postOptSimulation?.loss_distribution || [],
-      60
-    );
-  }, [simulationResults, postOptSimulation]);
+    // If backend compact coordinates are available, use them directly
+    if (baselineLec && baselineLec.length > 0) {
+      return computeLossExceedancePoints(baselineLec, postOptLec);
+    }
+    // Fallback if raw array was passed
+    if (simulationResults && simulationResults.loss_distribution) {
+      return computeLossExceedancePoints(
+        simulationResults.loss_distribution,
+        postOptSimulation?.loss_distribution || []
+      );
+    }
+    return [];
+  }, [baselineLec, postOptLec, simulationResults, postOptSimulation]);
 
-  if (!simulationResults || chartData.length === 0) {
+  if (chartData.length === 0) {
     return (
       <div className="chart-card empty-chart">
         <div className="chart-header">
           <h3>Loss Exceedance Curve (Empirical CCDF)</h3>
         </div>
-        <p className="empty-message">No simulation distribution data available.</p>
+        <p className="empty-message">No simulation exceedance curve data available.</p>
       </div>
     );
   }
 
-  const baselineVar95 = simulationResults.var_95 || 0;
-  const postOptVar95 = postOptSimulation?.var_95 || optimizationResults?.post_opt_var_95 || 0;
+  const baselineVar95 = simulationResults?.var_95 || 0;
 
   return (
     <div className="chart-card">
@@ -77,7 +84,7 @@ export default function LossExceedanceCurve({
         <div>
           <h3>Loss Exceedance Curve (Empirical CCDF)</h3>
           <p className="chart-subtitle">
-            Probability of annual breach losses exceeding financial thresholds (100,000 Monte Carlo trial years)
+            Probability of annual breach losses exceeding financial thresholds (Compact backend empirical representation)
           </p>
         </div>
         <div className="chart-legend-badge font-mono">
@@ -134,7 +141,7 @@ export default function LossExceedanceCurve({
               fill="url(#baselineGradient)"
             />
 
-            {postOptSimulation && (
+            {postOptLec && postOptLec.length > 0 && (
               <Area
                 type="monotone"
                 dataKey="postOptProb"
@@ -164,7 +171,7 @@ export default function LossExceedanceCurve({
       </div>
 
       <div className="chart-footer font-mono">
-        <span>* Exceedance probability derived empirically from 100,000 vectorized Monte Carlo trial years.</span>
+        <span>* Exceedance probability derived from 100,000 Monte Carlo trial years; compact backend coordinate representation.</span>
       </div>
     </div>
   );

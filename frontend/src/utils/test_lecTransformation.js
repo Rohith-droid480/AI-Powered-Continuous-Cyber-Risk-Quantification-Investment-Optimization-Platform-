@@ -7,15 +7,26 @@ function runTests() {
   const emptyRes = computeLossExceedancePoints([], []);
   console.assert(emptyRes.length === 0, 'Empty input should return empty array');
 
-  // Test 2: Hand-computable distribution [0, 100, 200, 300]
-  const baseDist = [0, 100, 200, 300];
-  const pts = computeLossExceedancePoints(baseDist, [0, 100], 10);
+  // Test 2: Compact backend coordinate points
+  const compactBaseline = [
+    { loss: 0, exceedance_probability: 100.0 },
+    { loss: 100000, exceedance_probability: 75.0 },
+    { loss: 500000, exceedance_probability: 50.0 },
+    { loss: 1000000, exceedance_probability: 25.0 },
+  ];
+  const compactPost = [
+    { loss: 0, exceedance_probability: 100.0 },
+    { loss: 100000, exceedance_probability: 40.0 },
+    { loss: 500000, exceedance_probability: 10.0 },
+    { loss: 1000000, exceedance_probability: 0.0 },
+  ];
+
+  const pts = computeLossExceedancePoints(compactBaseline, compactPost);
   
-  console.assert(pts.length === 4, 'Should return 4 points for 4 inputs');
-  console.assert(pts[0].baselineProb === 100.0, 'First point exceedance probability should be 100% (4/4 >= 0)');
-  console.assert(pts[1].baselineProb === 75.0, 'Second point exceedance probability should be 75% (3/4 >= 100)');
-  console.assert(pts[2].baselineProb === 50.0, 'Third point exceedance probability should be 50% (2/4 >= 200)');
-  console.assert(pts[3].baselineProb === 25.0, 'Fourth point exceedance probability should be 25% (1/4 >= 300)');
+  console.assert(pts.length === 4, 'Should return 4 points');
+  console.assert(pts[0].baselineProb === 100.0, 'First point baseline prob should be 100%');
+  console.assert(pts[1].postOptProb === 40.0, 'Second point post-opt prob should be 40%');
+  console.assert(pts[3].postOptProb === 0.0, 'Fourth point post-opt prob should be 0%');
 
   // Test 3: Currency formatting
   console.assert(formatCurrencyShort(150000) === '₹1.50L', '150000 should format as ₹1.50L');

@@ -118,7 +118,7 @@ async def get_scan_results(
 
         if job.enriched_vulnerabilities:
             from app.risk.calibration import calibrate_vulnerability_risk
-            from app.simulation.engine import run_monte_carlo_simulation
+            from app.simulation.engine import run_monte_carlo_simulation, generate_compact_lec
             from app.optimization.optimizer import optimize_patch_investments
 
             records = [calibrate_vulnerability_risk(e) for e in job.enriched_vulnerabilities]
@@ -137,6 +137,9 @@ async def get_scan_results(
                     "message": sim_err.message,
                 }
 
+            # Generate compact LEC coordinates from baseline distribution
+            baseline_lec = generate_compact_lec(sim_results.loss_distribution, max_points=100)
+
             # Layer 5 Optimization
             opt_results, opt_err = optimize_patch_investments(
                 risk_records=records,
@@ -144,17 +147,24 @@ async def get_scan_results(
                 job_id=f"{job_id}_opt",
                 seed=42,
             )
+            
+            sim_dump = sim_results.model_dump()
+            sim_dump["loss_distribution"] = []  # Strip raw 100k array to keep payload lightweight
+
             if opt_err:
                 return {
                     "job_id": job_id,
                     "status": JobStatusEnum.OPTIMIZATION_UNAVAILABLE.value,
                     "message": opt_err.message,
-                    "simulation_results": sim_results.model_dump() if sim_results else None,
+                    "simulation_results": sim_dump,
+                    "baseline_lec": baseline_lec,
+                    "post_opt_lec": [],
                 }
 
             # Post-optimization simulation distribution for Loss Exceedance Curve
             remaining = [r for r in records if r.vulnerability.cve_id not in opt_results.selected_cves]
             post_sim_results = None
+            post_opt_lec = []
             if remaining:
                 post_sim_results, _ = run_monte_carlo_simulation(
                     risk_records=remaining,
@@ -162,13 +172,21 @@ async def get_scan_results(
                     job_id=f"{job_id}_post_sim",
                     seed=42,
                 )
+                if post_sim_results:
+                    post_opt_lec = generate_compact_lec(post_sim_results.loss_distribution, max_points=100)
+
+            post_sim_dump = post_sim_results.model_dump() if post_sim_results else None
+            if post_sim_dump:
+                post_sim_dump["loss_distribution"] = []  # Strip raw 100k array
 
             return {
                 "job_id": job_id,
                 "status": JobStatusEnum.COMPLETED.value,
-                "simulation_results": sim_results.model_dump() if sim_results else None,
+                "simulation_results": sim_dump,
                 "optimization_results": opt_results.model_dump() if opt_results else None,
-                "post_opt_simulation_results": post_sim_results.model_dump() if post_sim_results else None,
+                "post_opt_simulation_results": post_sim_dump,
+                "baseline_lec": baseline_lec,
+                "post_opt_lec": post_opt_lec,
                 "vulnerabilities": [ev.model_dump() for ev in job.enriched_vulnerabilities],
             }
 
@@ -206,10 +224,18 @@ async def get_scan_results(
         delta_eal_per_cve={"CVE-2021-44228": 75000.0},
     )
 
+    from app.simulation.engine import generate_compact_lec
+
+    stub_baseline_lec = generate_compact_lec(stub_sim_results.loss_distribution, max_points=100)
+    stub_sim_dump = stub_sim_results.model_dump()
+    stub_sim_dump["loss_distribution"] = []
+
     return {
         "job_id": job_id,
         "status": JobStatusEnum.COMPLETED.value,
-        "simulation_results": stub_sim_results.model_dump(),
+        "simulation_results": stub_sim_dump,
         "optimization_results": stub_opt_results.model_dump(),
+        "baseline_lec": stub_baseline_lec,
+        "post_opt_lec": [],
     }
 

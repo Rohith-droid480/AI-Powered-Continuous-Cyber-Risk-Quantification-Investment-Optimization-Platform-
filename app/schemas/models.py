@@ -62,6 +62,11 @@ class PerCveRiskSummary(BaseModel):
     baseline_eal: float
 
 
+class LecPoint(BaseModel):
+    loss: float = Field(..., description="Annual loss magnitude in INR (₹)")
+    exceedance_probability: float = Field(..., description="Empirical exceedance probability in percentage (0-100%)")
+
+
 class SimulationResults(BaseModel):
     job_id: str
     eal: float = Field(..., description="Expected Annual Loss")
@@ -69,6 +74,10 @@ class SimulationResults(BaseModel):
     cvar_95: float = Field(..., description="Conditional Value at Risk at 95th percentile")
     loss_distribution: List[float] = Field(default_factory=list, description="Monte Carlo loss distribution array")
     per_cve_risk: List[PerCveRiskSummary] = Field(default_factory=list, description="Per-CVE LEF and expected loss magnitude for Layer 5")
+    p10: Optional[float] = Field(None, description="10th percentile of annual loss distribution")
+    p50: Optional[float] = Field(None, description="50th percentile / median of annual loss distribution")
+    p90: Optional[float] = Field(None, description="90th percentile of annual loss distribution")
+    p99: Optional[float] = Field(None, description="99th percentile of annual loss distribution")
 
 
 class OptimizationResults(BaseModel):
