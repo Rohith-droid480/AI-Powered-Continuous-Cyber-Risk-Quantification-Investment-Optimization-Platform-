@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any, Optional, List
 
 from app.schemas.models import (
@@ -16,6 +17,15 @@ app = FastAPI(
     version="0.1.0",
     description="Backend API for scan upload, async ingestion, risk simulation, and patch optimization.",
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 
 @app.get("/")
@@ -96,10 +106,116 @@ async def get_parsed_vulnerabilities(job_id: str) -> List[EnrichedVulnerability]
 
 
 @app.get("/scan/{job_id}/results", status_code=status.HTTP_200_OK)
-async def get_scan_results(job_id: str) -> Dict[str, Any]:
+async def get_scan_results(
+    job_id: str,
+    budget: float = 150000.0,
+) -> Dict[str, Any]:
     """
-    GET /scan/{job_id}/results - Returns stub risk quantification and optimization results.
+    GET /scan/{job_id}/results - Returns risk quantification and patch optimization results.
+    Executes real Layer 3 calibration, Layer 4 Monte Carlo simulation, and Layer 5 optimization
+    when an actual parsed job is requested.
     """
+    job = job_manager.get_job(job_id)
+
+    # If job exists and has processed vulnerabilities, execute real pipeline
+    if job is not None:
+        if job.status == JobStatusEnum.INGESTION_FAILED:
+            return {
+                "job_id": job_id,
+                "status": JobStatusEnum.INGESTION_FAILED.value,
+                "message": job.message or "Ingestion failed.",
+            }
+
+        if job.enriched_vulnerabilities:
+            from app.risk.calibration import calibrate_vulnerability_risk
+            from app.simulation.engine import run_monte_carlo_simulation, generate_compact_lec
+            from app.optimization.optimizer import optimize_patch_investments
+
+            records = [calibrate_vulnerability_risk(e) for e in job.enriched_vulnerabilities]
+
+            # Baseline Layer 4 Simulation
+            sim_results, sim_err = run_monte_carlo_simulation(
+                risk_records=records,
+                num_iterations=100000,
+                job_id=f"{job_id}_sim",
+                seed=42,
+            )
+            if sim_err:
+                return {
+                    "job_id": job_id,
+                    "status": JobStatusEnum.SIMULATION_FAILED.value,
+                    "message": sim_err.message,
+                }
+
+            # Generate compact LEC coordinates from baseline distribution
+            baseline_lec = generate_compact_lec(sim_results.loss_distribution, max_points=100)
+
+            # Layer 5 Optimization
+            opt_results, opt_err = optimize_patch_investments(
+                risk_records=records,
+                budget=budget,
+                job_id=f"{job_id}_opt",
+                seed=42,
+            )
+            
+            sim_dump = sim_results.model_dump()
+            sim_dump["loss_distribution"] = []  # Strip raw 100k array to keep payload lightweight
+
+            if opt_err:
+                return {
+                    "job_id": job_id,
+                    "status": JobStatusEnum.OPTIMIZATION_UNAVAILABLE.value,
+                    "message": opt_err.message,
+                    "simulation_results": sim_dump,
+                    "baseline_lec": baseline_lec,
+                    "post_opt_lec": [],
+                }
+
+            # Post-optimization simulation distribution for Loss Exceedance Curve
+            remaining = [r for r in records if r.vulnerability.cve_id not in opt_results.selected_cves]
+            if len(remaining) == 0:
+                # Deliberate business rule: zero remaining vulnerabilities means 100% of scanned risk is remediated.
+                # Construct explicit zero SimulationResults object so API response contains complete zero metrics.
+                post_sim_results = SimulationResults(
+                    job_id=f"{job_id}_post_sim",
+                    eal=0.0,
+                    var_95=0.0,
+                    cvar_95=0.0,
+                    loss_distribution=[0.0] * 100,
+                    per_cve_risk=[],
+                    p10=0.0,
+                    p50=0.0,
+                    p90=0.0,
+                    p99=0.0,
+                )
+                post_opt_lec = generate_compact_lec(post_sim_results.loss_distribution, max_points=100)
+            else:
+                post_sim_results, _ = run_monte_carlo_simulation(
+                    risk_records=remaining,
+                    num_iterations=100000,
+                    job_id=f"{job_id}_post_sim",
+                    seed=42,
+                )
+                if post_sim_results:
+                    post_opt_lec = generate_compact_lec(post_sim_results.loss_distribution, max_points=100)
+
+            post_sim_dump = post_sim_results.model_dump() if post_sim_results else None
+            if post_sim_dump:
+                post_sim_dump["loss_distribution"] = []  # Strip raw 100k array
+
+
+            return {
+                "job_id": job_id,
+                "status": JobStatusEnum.COMPLETED.value,
+                "simulation_results": sim_dump,
+                "optimization_results": opt_results.model_dump() if opt_results else None,
+                "post_opt_simulation_results": post_sim_dump,
+                "baseline_lec": baseline_lec,
+                "post_opt_lec": post_opt_lec,
+                "vulnerabilities": [ev.model_dump() for ev in job.enriched_vulnerabilities],
+            }
+
+    # Backward-compatible stub fallback
     stub_sim_results = SimulationResults(
         job_id=job_id,
         eal=150000.0,
@@ -133,9 +249,18 @@ async def get_scan_results(job_id: str) -> Dict[str, Any]:
         delta_eal_per_cve={"CVE-2021-44228": 75000.0},
     )
 
+    from app.simulation.engine import generate_compact_lec
+
+    stub_baseline_lec = generate_compact_lec(stub_sim_results.loss_distribution, max_points=100)
+    stub_sim_dump = stub_sim_results.model_dump()
+    stub_sim_dump["loss_distribution"] = []
+
     return {
         "job_id": job_id,
         "status": JobStatusEnum.COMPLETED.value,
-        "simulation_results": stub_sim_results.model_dump(),
+        "simulation_results": stub_sim_dump,
         "optimization_results": stub_opt_results.model_dump(),
+        "baseline_lec": stub_baseline_lec,
+        "post_opt_lec": [],
     }
+

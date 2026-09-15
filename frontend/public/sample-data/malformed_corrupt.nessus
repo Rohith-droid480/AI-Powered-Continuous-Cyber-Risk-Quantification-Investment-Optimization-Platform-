@@ -1,0 +1,10 @@
+<?xml version="1.0" ?>
+<NessusClientData_v2>
+  <Policy>
+    <policyName>Corrupted Assessment Run
+  <Report name="Broken Scan">
+    <ReportHost name="192.168.1.99">
+      <ReportItem port="443" severity="critical" unclosed_tag=yes>
+        <description>Corrupted payload without proper XML tags <<&&>>
+        <cve>CVE-BROKEN-9999
+</NessusClientData_v2>

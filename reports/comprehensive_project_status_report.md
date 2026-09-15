@@ -1,4 +1,8 @@
-# Comprehensive Project Status & Technical Handoff Report
+# COMPREHENSIVE PROJECT STATUS REPORT
+
+> [!WARNING]
+> **THIS HISTORICAL REPORT IS SUPERSEDED BY THE CANONICAL REPORT: [`/reports/FINAL_STATUS.md`](file:///d:/SIH%20PROJECT/reports/FINAL_STATUS.md)**  
+> **Verified Ground Truth:** File `app/risk/calibration.py` (function `calibrate_vulnerability_risk`), formula `TCap / RS / Vuln / TEF / LEF`, `LogNormal(mu≈18.5520, sigma≈1.2686)` anchored to ₹255,000,000, Python 3.14.3, React 19.2.8.
 
 **Project Title**: AI-Powered Continuous Cyber Risk Quantification & Investment Optimization Platform  
 **Repository**: `https://github.com/Rohith-droid480/AI-Powered-Continuous-Cyber-Risk-Quantification-Investment-Optimization-Platform-.git`  

@@ -162,6 +162,11 @@ def run_monte_carlo_simulation(
     var_95 = float(np.percentile(annual_losses, 95))
     tail_losses = annual_losses[annual_losses >= var_95]
     cvar_95 = float(np.mean(tail_losses)) if len(tail_losses) > 0 else var_95
+
+    p10 = float(np.percentile(annual_losses, 10))
+    p50 = float(np.percentile(annual_losses, 50))
+    p90 = float(np.percentile(annual_losses, 90))
+    p99 = float(np.percentile(annual_losses, 99))
     
     return SimulationResults(
         job_id=job_id,
@@ -170,4 +175,56 @@ def run_monte_carlo_simulation(
         cvar_95=cvar_95,
         loss_distribution=annual_losses.tolist(),
         per_cve_risk=per_cve_summaries,
+        p10=p10,
+        p50=p50,
+        p90=p90,
+        p99=p99,
     ), None
+
+
+def generate_compact_lec(
+    loss_distribution: List[float],
+    max_points: int = 100,
+) -> List[dict]:
+    """
+    Generates a compact empirical Loss Exceedance Curve (CCDF) coordinate representation
+    from a Monte Carlo annual loss distribution array.
+    
+    Contract:
+    - Sorts distribution ascending.
+    - Exceedance Probability P(Loss >= S) = (N - i) / N * 100%
+    - Uses deterministic quantile sampling across num=max_points.
+    - Guarantees max_points <= 200.
+    - Guarantees output is monotonically non-increasing in exceedance probability.
+    - Guarantees probabilities are within [0.0, 100.0].
+    """
+    if not loss_distribution or len(loss_distribution) == 0:
+        return []
+
+    sorted_losses = np.sort(np.array(loss_distribution, dtype=np.float64))
+    n = len(sorted_losses)
+
+    # Sample max_points deterministically via linspace
+    target_count = min(max(10, max_points), 200)
+    if n <= target_count:
+        indices = np.arange(n)
+    else:
+        indices = np.unique(np.linspace(0, n - 1, num=target_count, dtype=int))
+
+    points = []
+    for idx in indices:
+        loss_val = float(sorted_losses[idx])
+        prob_val = float(((n - idx) / n) * 100.0)
+        points.append({
+            "loss": loss_val,
+            "exceedance_probability": prob_val,
+        })
+
+    # Ensure final zero probability point if max loss > 0
+    if points and points[-1]["loss"] > 0 and points[-1]["exceedance_probability"] > 0:
+        points.append({
+            "loss": points[-1]["loss"],
+            "exceedance_probability": 0.0,
+        })
+
+    return points
