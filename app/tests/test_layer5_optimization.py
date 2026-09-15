@@ -195,3 +195,26 @@ def test_layer5_real_data_integration():
     assert opt_res.post_opt_eal > 0.0
     assert opt_res.post_opt_var_95 > 0.0
     assert opt_res.post_opt_cvar_95 >= opt_res.post_opt_var_95
+
+
+def test_layer5_empty_remaining_records_zero_residual():
+    """
+    TEST 7 — EMPTY REMAINING SET (DELIBERATE BUSINESS RULE)
+    Verifies that when all vulnerabilities are selected (budget >= total cost),
+    the remaining records list is empty and post_opt_eal, post_opt_var_95, post_opt_cvar_95
+    are explicitly returned as 0.0 without triggering SIMULATION_FAILED.
+    """
+    cve_a = _make_dummy_record("CVE-A", cvss_score=5.0, lef=0.2, expected_loss_magnitude=100_000_000.0) # cost=16k
+
+    records = [cve_a]
+    budget = 50_000.0  # Budget covers CVE-A
+
+    results, err = optimize_patch_investments(records, budget=budget, seed=42)
+
+    assert err is None
+    assert results.selected_cves == ["CVE-A"]
+    assert results.total_cost == 16_000.0
+    assert results.post_opt_eal == 0.0
+    assert results.post_opt_var_95 == 0.0
+    assert results.post_opt_cvar_95 == 0.0
+

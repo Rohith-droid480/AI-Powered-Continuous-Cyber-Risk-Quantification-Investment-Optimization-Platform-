@@ -10,6 +10,12 @@
 │ LAYER 2 — ENRICHMENT (pre-seeded, zero live calls during demo)      │
 │  Local DB, pre-loaded: ~5,000 CVEs × {CVSS, EPSS, KEV}              │
 │  Found → full data. Not found → EPSS=0.001, KEV=false, PARTIAL flag│
+│  * Note: Layer 2 uses SQLite (app.db) for the internal-round demo, │
+│  a deliberate deviation from the originally planned PostgreSQL,    │
+│  chosen for zero-dependency demo reliability (no external DB      │
+│  service to fail during judging). Schema and query logic are       │
+│  portable to PostgreSQL without architecture changes if needed for  │
+│  the full SIH round.                                              │
 └──────────────────────────────┬─────────────────────────────────────┘
                                 ▼
 ┌──────────────────────────────────────────────────────────────────┐

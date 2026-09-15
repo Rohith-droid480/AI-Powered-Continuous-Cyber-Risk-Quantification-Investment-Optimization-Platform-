@@ -19,18 +19,26 @@ import {
 const CustomTooltip = ({ active, payload }) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
+    const hasPostOpt = data.postOptProb !== null && data.postOptProb !== undefined;
+    const deltaProb = hasPostOpt ? Math.max(0, data.baselineProb - data.postOptProb) : 0;
+
     return (
       <div className="custom-tooltip">
         <p className="tooltip-title font-mono">
-          Loss Magnitude: <strong className="text-white">{formatCurrency(data.loss)}</strong>
+          Loss Threshold: <strong className="text-white">{formatCurrency(data.loss)}</strong>
         </p>
-        <div className="tooltip-details">
+        <div className="tooltip-details font-mono">
           <p className="text-amber">
             Baseline Exceedance: <strong>{data.baselineProb.toFixed(1)}%</strong>
           </p>
-          {data.postOptProb !== null && data.postOptProb !== undefined && (
+          {hasPostOpt && (
             <p className="text-emerald">
-              Post-Opt Exceedance: <strong>{data.postOptProb.toFixed(1)}%</strong>
+              Post-Remediation Exceedance: <strong>{data.postOptProb.toFixed(1)}%</strong>
+            </p>
+          )}
+          {hasPostOpt && deltaProb > 0 && (
+            <p className="text-cyan">
+              Exceedance Reduction: <strong>-{deltaProb.toFixed(1)}%</strong>
             </p>
           )}
         </div>
@@ -69,9 +77,11 @@ export default function LossExceedanceCurve({
     return (
       <div className="chart-card empty-chart">
         <div className="chart-header">
-          <h3>Loss Exceedance Curve (Empirical CCDF)</h3>
+          <h3>📈 Loss Exceedance Curve (Empirical CCDF)</h3>
         </div>
-        <p className="empty-message">No simulation exceedance curve data available.</p>
+        <p className="empty-message text-muted font-mono" style={{ padding: '2rem 0', textAlign: 'center' }}>
+          No simulation exceedance curve data available. Upload a scan file or run a demo scan to generate risk curves.
+        </p>
       </div>
     );
   }
@@ -82,14 +92,14 @@ export default function LossExceedanceCurve({
     <div className="chart-card">
       <div className="chart-header">
         <div>
-          <h3>Loss Exceedance Curve (Empirical CCDF)</h3>
+          <h3>📈 Loss Exceedance Curve (Empirical CCDF)</h3>
           <p className="chart-subtitle">
-            Probability of annual breach losses exceeding financial thresholds (Compact backend empirical representation)
+            Probability of annual breach losses exceeding financial thresholds (100,000-trial backend empirical distribution)
           </p>
         </div>
         <div className="chart-legend-badge font-mono">
-          <span>X: Loss (₹)</span>
-          <span>Y: P(Loss ≥ X) %</span>
+          <span>X: Loss Magnitude (₹)</span>
+          <span>Y: Exceedance Probability P(Loss ≥ X) %</span>
         </div>
       </div>
 
@@ -98,12 +108,12 @@ export default function LossExceedanceCurve({
           <AreaChart data={chartData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
             <defs>
               <linearGradient id="baselineGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.4} />
-                <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.0} />
+                <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.45} />
+                <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02} />
               </linearGradient>
               <linearGradient id="postOptGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.5} />
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                <stop offset="5%" stopColor="#10b981" stopOpacity={0.55} />
+                <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
               </linearGradient>
             </defs>
 
@@ -113,14 +123,14 @@ export default function LossExceedanceCurve({
               dataKey="loss"
               tickFormatter={formatCurrencyShort}
               stroke="#64748b"
-              tick={{ fill: '#94a3b8', fontSize: 12 }}
+              tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'JetBrains Mono' }}
             />
 
             <YAxis
               unit="%"
               domain={[0, 100]}
               stroke="#64748b"
-              tick={{ fill: '#94a3b8', fontSize: 12 }}
+              tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'JetBrains Mono' }}
             />
 
             <Tooltip content={<CustomTooltip />} />
@@ -128,7 +138,7 @@ export default function LossExceedanceCurve({
             <Legend
               verticalAlign="top"
               align="right"
-              wrapperStyle={{ paddingBottom: '10px' }}
+              wrapperStyle={{ paddingBottom: '10px', fontSize: '0.8rem', fontFamily: 'JetBrains Mono' }}
             />
 
             <Area
@@ -156,12 +166,13 @@ export default function LossExceedanceCurve({
             {baselineVar95 > 0 && (
               <ReferenceLine
                 x={baselineVar95}
-                stroke="#ef4444"
+                stroke="#f43f5e"
                 strokeDasharray="4 4"
                 label={{
                   value: `Baseline VaR95: ${formatCurrencyShort(baselineVar95)}`,
-                  fill: '#ef4444',
+                  fill: '#f43f5e',
                   fontSize: 11,
+                  fontFamily: 'JetBrains Mono',
                   position: 'top',
                 }}
               />

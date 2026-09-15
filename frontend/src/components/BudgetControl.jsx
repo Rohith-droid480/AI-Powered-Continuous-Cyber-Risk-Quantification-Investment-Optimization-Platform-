@@ -1,13 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { formatCurrency } from '../utils/lecTransformation';
 
-export default function BudgetControl({ currentBudget, onBudgetChange, isOptimizing }) {
-  const [inputValue, setInputValue] = useState(currentBudget || 150000);
+export default function BudgetControl({ budget, currentBudget: altBudget, onBudgetChange, isOptimizing, totalCost, selectedCount }) {
+  const activeBudget = budget ?? altBudget ?? 150000;
+  const [inputValue, setInputValue] = useState(activeBudget);
+
+  useEffect(() => {
+    setInputValue(activeBudget);
+  }, [activeBudget]);
 
   const presets = [
-    { label: 'Low Budget (₹50k)', value: 50000 },
-    { label: 'Medium Demo (₹150k)', value: 150000 },
-    { label: 'Full Scope (₹300k)', value: 300000 },
+    { label: 'Low Budget (₹50k)', value: 50000, desc: 'Targeted Remediation' },
+    { label: 'Medium Demo (₹150k)', value: 150000, desc: 'High ROI Balance' },
+    { label: 'Full Scope (₹300k)', value: 300000, desc: '100% Remediated' },
   ];
 
   const handleSliderChange = (e) => {
@@ -22,34 +27,54 @@ export default function BudgetControl({ currentBudget, onBudgetChange, isOptimiz
   };
 
   return (
-    <div className="budget-card">
-      <div className="budget-header">
+    <div className="view-card budget-card font-sans">
+      <div className="card-header">
         <div>
-          <h3>Remediation Budget Constraint</h3>
-          <p className="budget-subtitle">
-            Adjust budget limit to trigger real-time 0/1 Knapsack optimization and Monte Carlo re-simulation
+          <h3 className="card-title font-mono">
+            <span className="title-icon">⚡</span> Remediation Budget Constraint
+          </h3>
+          <p className="card-subtitle">
+            Adjust investment limit to trigger real-time PuLP 0/1 Knapsack optimization and Monte Carlo re-simulation
           </p>
         </div>
-        <div className="budget-current-value font-mono">
-          {formatCurrency(currentBudget)}
+        <div className="budget-value-badge font-mono">
+          <span className="badge-label">TARGET BUDGET</span>
+          <span className="badge-val text-cyan">{formatCurrency(activeBudget)}</span>
         </div>
       </div>
 
-      <div className="budget-presets">
-        {presets.map((p) => (
-          <button
-            key={p.value}
-            type="button"
-            className={`preset-btn ${currentBudget === p.value ? 'active' : ''}`}
-            onClick={() => handlePresetClick(p.value)}
-            disabled={isOptimizing}
-          >
-            {p.label}
-          </button>
-        ))}
+      {/* Preset Chips Row */}
+      <div className="budget-presets-container">
+        <div className="presets-label font-mono">BUDGET PRESETS:</div>
+        <div className="presets-grid">
+          {presets.map((p) => {
+            const isActive = activeBudget === p.value;
+            return (
+              <button
+                key={p.value}
+                type="button"
+                className={`budget-preset-chip font-mono ${isActive ? 'active' : ''}`}
+                onClick={() => handlePresetClick(p.value)}
+                disabled={isOptimizing}
+              >
+                <div className="chip-content">
+                  <span className="chip-label">{p.label}</span>
+                  <span className="chip-desc">{p.desc}</span>
+                </div>
+                {isActive && <span className="chip-indicator">✓ Active</span>}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="slider-container">
+      {/* Slider Control */}
+      <div className="budget-slider-box">
+        <div className="slider-header font-mono">
+          <span className="slider-title">RANGE CONTROLLER</span>
+          <span className="slider-current text-cyan">{formatCurrency(inputValue)}</span>
+        </div>
+
         <input
           type="range"
           min="10000"
@@ -58,18 +83,20 @@ export default function BudgetControl({ currentBudget, onBudgetChange, isOptimiz
           value={inputValue}
           onChange={handleSliderChange}
           disabled={isOptimizing}
-          className="budget-slider"
+          className="custom-budget-slider"
         />
-        <div className="slider-labels font-mono">
+
+        <div className="slider-ticks font-mono">
           <span>Min: ₹10k</span>
-          <span>Target: {formatCurrency(inputValue)}</span>
+          <span className="tick-active">Current: {formatCurrency(inputValue)}</span>
           <span>Max: ₹400k</span>
         </div>
       </div>
 
       {isOptimizing && (
-        <div className="optimizing-indicator font-mono text-cyan">
-          <span className="spinner"></span> Re-running PuLP 0/1 Knapsack Optimization & Monte Carlo Re-simulation...
+        <div className="optimizing-status-box font-mono animate-fadeIn">
+          <span className="spinner"></span>
+          <span>Solving PuLP Integer Program & Resimulating 100,000 Monte Carlo Trials...</span>
         </div>
       )}
     </div>

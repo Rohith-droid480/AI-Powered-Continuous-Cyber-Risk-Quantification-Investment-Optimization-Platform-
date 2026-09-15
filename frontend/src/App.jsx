@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import KPICards from './components/KPICards';
-import LossExceedanceCurve from './components/LossExceedanceCurve';
-import PatchList from './components/PatchList';
-import BudgetControl from './components/BudgetControl';
-import UploadFlow from './components/UploadFlow';
-import ModelAssumptionsBanner from './components/ModelAssumptionsBanner';
+import AppShell from './components/layout/AppShell';
+import OverviewView from './components/views/OverviewView';
+import ScanIngestionView from './components/views/ScanIngestionView';
+import QuantitativeRiskView from './components/views/QuantitativeRiskView';
+import OptimizationView from './components/views/OptimizationView';
+import FindingsView from './components/views/FindingsView';
+import MethodologyView from './components/views/MethodologyView';
 import './index.css';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -15,12 +16,12 @@ const INITIAL_DEMO_DATA = {
   status: 'COMPLETED',
   simulation_results: {
     job_id: 'demo_enterprise_scan_001',
-    eal: 965730769.23,
+    eal: 967234205.61,
     var_95: 3129621032.79,
     cvar_95: 5033058626.55,
-    p10: 0.0,
-    p50: 0.0,
-    p90: 1887895475.61,
+    p10: 61642210.08,
+    p50: 250000000.0,
+    p90: 2560000000.0,
     p99: 7210000000.0,
     loss_distribution: [],
     per_cve_risk: [
@@ -50,9 +51,9 @@ const INITIAL_DEMO_DATA = {
     eal: 475454244.15,
     var_95: 1887895475.61,
     cvar_95: 3361113758.92,
-    p10: 0.0,
-    p50: 0.0,
-    p90: 1100000000.0,
+    p10: 1029910.0,
+    p50: 150000000.0,
+    p90: 1061048655.0,
     p99: 4500000000.0,
     loss_distribution: [],
   },
@@ -78,6 +79,7 @@ const INITIAL_DEMO_DATA = {
 };
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState('overview');
   const [data, setData] = useState(INITIAL_DEMO_DATA);
   const [budget, setBudget] = useState(150000);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -111,6 +113,11 @@ export default function App() {
         return;
       }
 
+      if (json.status === 'OPTIMIZATION_UNAVAILABLE') {
+        setErrorState(`OPTIMIZATION_UNAVAILABLE: ${json.message || 'Remediation optimization solver unavailable.'}`);
+        return;
+      }
+
       setData(json);
       setErrorState(null);
     } catch (err) {
@@ -127,19 +134,24 @@ export default function App() {
       setIsOptimizing(false);
     } else {
       // Local re-optimization calculation for demo mode
-      const selected = newBudget >= 120000
-        ? ['CVE-2008-5161', 'CVE-2020-1472', 'CVE-2021-41773']
-        : newBudget >= 96000
-        ? ['CVE-2020-1472', 'CVE-2021-41773']
-        : newBudget >= 32000
-        ? ['CVE-2021-41773']
-        : [];
-      const totalCost = selected.includes('CVE-2008-5161') ? 8000 : 0
-        + (selected.includes('CVE-2020-1472') ? 80000 : 0)
-        + (selected.includes('CVE-2021-41773') ? 32000 : 0);
+      let selected = [];
+      let totalCost = 0;
+      if (newBudget >= 300000) {
+        selected = ['CVE-2008-5161', 'CVE-2017-5638', 'CVE-2020-1472', 'CVE-2021-41773', 'CVE-2021-44228'];
+        totalCost = 188000;
+      } else if (newBudget >= 150000) {
+        selected = ['CVE-2008-5161', 'CVE-2020-1472', 'CVE-2021-41773'];
+        totalCost = 120000;
+      } else if (newBudget >= 100000) {
+        selected = ['CVE-2020-1472', 'CVE-2021-41773'];
+        totalCost = 112000;
+      } else if (newBudget >= 50000) {
+        selected = ['CVE-2021-41773'];
+        totalCost = 32000;
+      }
 
-      const deltaEal = selected.length * 200000000;
-      const postOptEal = Math.max(0, 965730769.23 - deltaEal);
+      const baselineVal = 967234205.61;
+      const postOptEal = newBudget >= 300000 ? 0 : Math.max(0, baselineVal - selected.length * 240000000);
 
       setData((prev) => ({
         ...prev,
@@ -184,6 +196,7 @@ export default function App() {
           clearInterval(interval);
           await fetchResults(jobId, budget);
           setIsProcessing(false);
+          setActiveTab('overview'); // Switch to Overview upon completion
         } else if (statusData.status === 'INGESTION_FAILED') {
           clearInterval(interval);
           setErrorState(`INGESTION_FAILED: ${statusData.message || 'Invalid Nessus XML format.'}`);
@@ -202,22 +215,15 @@ export default function App() {
 
   // Select pre-packaged sample dataset
   const handleSampleSelect = async (sampleName) => {
-    if (sampleName === 'malformed_corrupt.nessus') {
-      setErrorState('INGESTION_FAILED: Failed to parse XML syntax: not well-formed (invalid token): line 7, column 62.');
-      return;
-    }
-
     setIsProcessing(true);
     setErrorState(null);
 
     try {
-      // Fetch sample from public/backend
       const res = await fetch(`/sample-data/${sampleName}`);
       let blob;
       if (res.ok) {
         blob = await res.blob();
       } else {
-        // Fallback synthetic blob
         blob = new Blob(['<NessusClientData_v2><Report name="Sample"></Report></NessusClientData_v2>'], { type: 'application/xml' });
       }
 
@@ -230,72 +236,57 @@ export default function App() {
   };
 
   return (
-    <div className="app-container">
-      {/* Header */}
-      <header className="app-header">
-        <div className="header-content">
-          <div className="brand font-mono">
-            <span className="brand-logo">🛡️</span>
-            <h1>AI-Powered Continuous Cyber Risk Quantification & Investment Optimization Platform</h1>
+    <AppShell
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      apiConnected={apiConnected}
+      budget={budget}
+      data={data}
+    >
+      {/* Fail-Soft Error Notification Banner */}
+      {errorState && (
+        <div className="error-banner animate-fadeIn font-mono">
+          <div className="error-content">
+            <span className="error-icon">⚠️</span>
+            <div className="error-text">
+              <strong>Pipeline Alert:</strong> {errorState}
+            </div>
           </div>
-          <div className="header-status font-mono">
-            <span className={`status-dot ${apiConnected ? 'connected' : 'offline'}`}></span>
-            <span>API {apiConnected ? 'Connected (localhost:8000)' : 'Demo Mode Active'}</span>
-          </div>
+          <button onClick={() => setErrorState(null)} className="error-close-btn font-mono">
+            Dismiss ✕
+          </button>
         </div>
-      </header>
+      )}
 
-      {/* Main Dashboard Grid */}
-      <main className="dashboard-main">
-        {/* Top Controls Grid */}
-        <section className="top-grid">
-          <UploadFlow
-            onFileUpload={handleFileUpload}
-            onSampleSelect={handleSampleSelect}
-            isProcessing={isProcessing}
-            errorState={errorState}
-          />
-          <BudgetControl
-            currentBudget={budget}
-            onBudgetChange={handleBudgetChange}
-            isOptimizing={isOptimizing}
-          />
-        </section>
+      {/* Render Active View Component */}
+      {activeTab === 'overview' && (
+        <OverviewView data={data} budget={budget} onNavigate={(tab) => setActiveTab(tab)} />
+      )}
 
-        {/* Executive KPI Cards */}
-        <section className="kpi-section">
-          <KPICards
-            simulationResults={data?.simulation_results}
-            optimizationResults={data?.optimization_results}
-            postOptSimulation={data?.post_opt_simulation_results}
-          />
-        </section>
+      {activeTab === 'scan' && (
+        <ScanIngestionView
+          onFileUpload={handleFileUpload}
+          onSampleSelect={handleSampleSelect}
+          isProcessing={isProcessing}
+          activeJobId={activeJobId}
+          apiConnected={apiConnected}
+        />
+      )}
 
-        {/* Visual Centerpiece: Loss Exceedance Curve */}
-        <section className="chart-section">
-          <LossExceedanceCurve
-            baselineLec={data?.baseline_lec}
-            postOptLec={data?.post_opt_lec}
-            simulationResults={data?.simulation_results}
-            postOptSimulation={data?.post_opt_simulation_results}
-            optimizationResults={data?.optimization_results}
-          />
-        </section>
+      {activeTab === 'risk' && <QuantitativeRiskView data={data} />}
 
-        {/* Remediation Action List */}
-        <section className="table-section">
-          <PatchList
-            vulnerabilities={data?.vulnerabilities || []}
-            simulationResults={data?.simulation_results}
-            optimizationResults={data?.optimization_results}
-          />
-        </section>
+      {activeTab === 'optimization' && (
+        <OptimizationView
+          data={data}
+          budget={budget}
+          onBudgetChange={handleBudgetChange}
+          isOptimizing={isOptimizing}
+        />
+      )}
 
-        {/* Methodology Disclosure */}
-        <section className="assumptions-section">
-          <ModelAssumptionsBanner />
-        </section>
-      </main>
-    </div>
+      {activeTab === 'findings' && <FindingsView data={data} />}
+
+      {activeTab === 'methodology' && <MethodologyView />}
+    </AppShell>
   );
 }

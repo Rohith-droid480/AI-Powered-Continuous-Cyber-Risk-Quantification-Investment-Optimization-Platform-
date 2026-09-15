@@ -19,7 +19,10 @@ export default function ModelAssumptionsBanner() {
           <strong>Secondary Loss Margin:</strong> 0.4 × Primary Loss (illustrative conservative margin covering DPDPA/regulatory exposure).
         </div>
         <div className="assumption-item">
-          <strong>Patch Cost Tiers:</strong> CVSS effort hours (Critical 40h, High 16h, Medium 8h, Low 4h @ ₹2,000/hr labor rate).
+          <strong>Patch Cost Tiers:</strong> CVSS effort hours (Critical 40h, High 16h, Medium 8h, Low 4h @ ₹2,000/hr labor rate) — our own estimated assumption.
+        </div>
+        <div className="assumption-item">
+          <strong>Threat Intelligence Database:</strong> Local SQLite database (`app/data/threat_intel.db`) lookup for EPSS probability & CISA KEV flags — no external network dependency.
         </div>
       </div>
     </div>

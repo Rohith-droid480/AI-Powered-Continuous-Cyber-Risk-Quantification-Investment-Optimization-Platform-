@@ -173,9 +173,23 @@ async def get_scan_results(
 
             # Post-optimization simulation distribution for Loss Exceedance Curve
             remaining = [r for r in records if r.vulnerability.cve_id not in opt_results.selected_cves]
-            post_sim_results = None
-            post_opt_lec = []
-            if remaining:
+            if len(remaining) == 0:
+                # Deliberate business rule: zero remaining vulnerabilities means 100% of scanned risk is remediated.
+                # Construct explicit zero SimulationResults object so API response contains complete zero metrics.
+                post_sim_results = SimulationResults(
+                    job_id=f"{job_id}_post_sim",
+                    eal=0.0,
+                    var_95=0.0,
+                    cvar_95=0.0,
+                    loss_distribution=[0.0] * 100,
+                    per_cve_risk=[],
+                    p10=0.0,
+                    p50=0.0,
+                    p90=0.0,
+                    p99=0.0,
+                )
+                post_opt_lec = generate_compact_lec(post_sim_results.loss_distribution, max_points=100)
+            else:
                 post_sim_results, _ = run_monte_carlo_simulation(
                     risk_records=remaining,
                     num_iterations=100000,
@@ -188,6 +202,7 @@ async def get_scan_results(
             post_sim_dump = post_sim_results.model_dump() if post_sim_results else None
             if post_sim_dump:
                 post_sim_dump["loss_distribution"] = []  # Strip raw 100k array
+
 
             return {
                 "job_id": job_id,

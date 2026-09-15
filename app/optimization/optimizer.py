@@ -190,10 +190,14 @@ def optimize_patch_investments(
     remaining_records = [rec for rec in risk_records if rec.vulnerability.cve_id not in selected_cves]
 
     if len(remaining_records) == 0:
+        # Deliberate business rule: an empty remaining set after optimization is a legitimate business outcome
+        # ("100% of scanned vulnerabilities have been remediated under budget"), NOT a simulation failure.
+        # We explicitly set post_opt_eal=0, post_opt_var_95=0, post_opt_cvar_95=0 without calling Layer 4 engine.
         post_opt_eal = 0.0
         post_opt_var_95 = 0.0
         post_opt_cvar_95 = 0.0
     else:
+
         sim_results, sim_job = run_monte_carlo_simulation(
             risk_records=remaining_records,
             num_iterations=num_iterations,

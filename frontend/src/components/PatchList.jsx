@@ -1,11 +1,11 @@
 import React from 'react';
-import { formatCurrency, formatCurrencyShort } from '../utils/lecTransformation';
+import { formatCurrency } from '../utils/lecTransformation';
 
 function getCvssCategory(score) {
-  if (score >= 9.0) return { label: 'Critical (40h)', cls: 'badge-critical' };
-  if (score >= 7.0) return { label: 'High (16h)', cls: 'badge-high' };
-  if (score >= 4.0) return { label: 'Medium (8h)', cls: 'badge-medium' };
-  return { label: 'Low (4h)', cls: 'badge-low' };
+  if (score >= 9.0) return { label: 'Critical (40h)', cls: 'critical' };
+  if (score >= 7.0) return { label: 'High (16h)', cls: 'high' };
+  if (score >= 4.0) return { label: 'Medium (8h)', cls: 'medium' };
+  return { label: 'Low (4h)', cls: 'low' };
 }
 
 function calculateCost(cvssScore) {
@@ -27,7 +27,6 @@ export default function PatchList({
   // Group per-CVE risk metrics
   const cveMap = new Map();
 
-  // Populate from per_cve_risk summaries
   perCveSummaries.forEach((item) => {
     cveMap.set(item.cve_id, {
       cve_id: item.cve_id,
@@ -37,7 +36,6 @@ export default function PatchList({
     });
   });
 
-  // Populate/enrich from vulnerabilities array
   vulnerabilities.forEach((vuln) => {
     const existing = cveMap.get(vuln.cve_id) || {};
     const cvss = vuln.cvss_score ?? existing.cvss ?? 0.0;
@@ -49,14 +47,15 @@ export default function PatchList({
       cvss: cvss,
       cost: cost,
       deltaEal: deltaEalMap[vuln.cve_id] || deltaEal,
-      pluginName: vuln.plugin_name || 'Nessus Plugin',
-      host: vuln.host || 'Asset',
+      pluginName: vuln.plugin_name || 'Nessus Vulnerability Plugin',
+      host: vuln.host || '192.168.1.10',
+      port: vuln.port || 80,
     });
   });
 
   const patchItems = Array.from(cveMap.values());
 
-  // Sort by Delta EAL descending (or selected status then Delta EAL)
+  // Sort by selected status then Delta EAL descending
   patchItems.sort((a, b) => {
     const aSelected = selectedCvesSet.has(a.cve_id) ? 1 : 0;
     const bSelected = selectedCvesSet.has(b.cve_id) ? 1 : 0;
@@ -71,32 +70,38 @@ export default function PatchList({
   const budget = optimizationResults?.budget || 0;
 
   return (
-    <div className="table-card">
-      <div className="table-header">
+    <div className="view-card patch-action-card font-sans">
+      <div className="card-header">
         <div>
-          <h3>PuLP 0/1 Knapsack Patch Optimization List</h3>
-          <p className="table-subtitle">
-            Remediations selected strictly to maximize total ΔEAL (LEF × Expected Loss) under budget constraint
+          <h3 className="card-title font-mono">
+            <span className="title-icon">🛡️</span> PuLP 0/1 Knapsack Patch Optimization Action List
+          </h3>
+          <p className="card-subtitle">
+            Remediations prioritized strictly to maximize total Expected Annual Loss reduction (ΔEAL) under target budget constraint
           </p>
         </div>
-        <div className="budget-summary-badge font-mono">
-          <span>Cost: <strong>{formatCurrency(totalSelectedCost)}</strong></span>
-          <span>/</span>
-          <span>Budget: <strong>{formatCurrency(budget)}</strong></span>
+        <div className="investment-summary-pill font-mono">
+          <span className="summary-label">ALLOCATED INVESTMENT</span>
+          <div className="summary-values">
+            <span className="val-used text-emerald">{formatCurrency(totalSelectedCost)}</span>
+            <span className="val-divider">/</span>
+            <span className="val-cap text-cyan">{formatCurrency(budget)}</span>
+          </div>
         </div>
       </div>
 
-      <div className="table-container">
-        <table className="patch-table">
+      <div className="table-responsive">
+        <table className="styled-patch-table">
           <thead>
-            <tr>
+            <tr className="font-mono">
               <th>Rank</th>
-              <th>CVE ID & Description</th>
-              <th>CVSS & Tier</th>
-              <th>Patch Cost (₹)</th>
-              <th>ΔEAL Risk Reduction (₹)</th>
-              <th>Efficiency (ΔEAL/Cost)</th>
-              <th>Optimization Status</th>
+              <th>CVE Identifier & Plugin Name</th>
+              <th>Host : Port</th>
+              <th>CVSS & Effort Tier</th>
+              <th>Patch Cost</th>
+              <th>ΔEAL Risk Reduction</th>
+              <th>Efficiency (ROI)</th>
+              <th>Optimization Decision</th>
             </tr>
           </thead>
           <tbody>
@@ -106,29 +111,44 @@ export default function PatchList({
               const efficiency = item.cost > 0 ? (item.deltaEal / item.cost).toFixed(1) : 'N/A';
 
               return (
-                <tr key={item.cve_id} className={isSelected ? 'row-selected' : 'row-unselected'}>
-                  <td className="font-mono text-center">#{index + 1}</td>
+                <tr key={item.cve_id} className={`patch-row ${isSelected ? 'selected' : 'unselected'}`}>
+                  <td className="font-mono text-center">
+                    <span className={`rank-badge font-mono ${isSelected ? 'active' : ''}`}>
+                      #{index + 1}
+                    </span>
+                  </td>
                   <td>
-                    <div className="cve-cell">
-                      <span className="cve-id font-mono">{item.cve_id}</span>
-                      <span className="cve-subtext">{item.pluginName} ({item.host})</span>
+                    <div className="cve-info-cell">
+                      <span className="cve-tag font-mono">{item.cve_id}</span>
+                      <span className="cve-title">{item.pluginName}</span>
                     </div>
                   </td>
+                  <td className="font-mono host-cell">
+                    {item.host}:{item.port}
+                  </td>
                   <td>
-                    <span className={`badge ${category.cls}`}>{item.cvss.toFixed(1)} — {category.label}</span>
+                    <span className={`cvss-effort-pill ${category.cls} font-mono`}>
+                      <span className="cvss-num">{item.cvss.toFixed(1)}</span>
+                      <span className="cvss-sep">—</span>
+                      <span className="cvss-tier">{category.label}</span>
+                    </span>
                   </td>
-                  <td className="font-mono text-right">{formatCurrency(item.cost)}</td>
-                  <td className="font-mono text-right text-emerald font-semibold">
-                    {formatCurrency(item.deltaEal)}
-                  </td>
-                  <td className="font-mono text-right text-cyan">
-                    {efficiency !== 'N/A' ? `${efficiency}x` : 'N/A'}
+                  <td className="font-mono cost-cell">{formatCurrency(item.cost)}</td>
+                  <td className="font-mono delta-eal-cell text-emerald">{formatCurrency(item.deltaEal)}</td>
+                  <td className="font-mono">
+                    <span className="roi-chip font-mono">
+                      {efficiency !== 'N/A' ? `${efficiency}x` : 'N/A'}
+                    </span>
                   </td>
                   <td>
                     {isSelected ? (
-                      <span className="status-badge badge-selected font-mono">✓ SELECTED FOR PATCH</span>
+                      <span className="decision-badge selected font-mono">
+                        <span className="icon">✓</span> Selected (Remediated)
+                      </span>
                     ) : (
-                      <span className="status-badge badge-unselected font-mono">UNSELECTED (BUDGET EXCEEDED)</span>
+                      <span className="decision-badge unselected font-mono">
+                        <span className="icon">✕</span> Unselected (Budget Cap)
+                      </span>
                     )}
                   </td>
                 </tr>
